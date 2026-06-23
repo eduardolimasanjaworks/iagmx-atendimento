@@ -104,12 +104,12 @@
 
   function restaurarEnvio() {
     preencherEnvio(state.envioPadrao || {});
-    setStatus('Humanizacao restaurada para o padrao carregado.', 'ok');
+    setStatus('Os campos de envio voltaram para os valores padrao que estavam carregados nesta tela.', 'ok');
   }
 
   function restaurarTempo() {
     preencherTempo(state.tempoPadrao || {});
-    setStatus('Debounce restaurado para o padrao carregado.', 'ok');
+    setStatus('Os campos de tempo voltaram para os valores padrao que estavam carregados nesta tela.', 'ok');
   }
 
   async function recarregarProcesso() {

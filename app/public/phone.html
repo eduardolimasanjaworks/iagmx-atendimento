@@ -152,9 +152,9 @@
       </div>
       <div class="actions">
         <button id="opsSalvarEnvioBtn" class="primary" type="button">Salvar humanizacao</button>
-        <button id="opsRestaurarEnvioBtn" type="button">Restaurar humanizacao</button>
+        <button id="opsRestaurarEnvioBtn" type="button">Voltar ao padrao carregado de envio</button>
         <button id="opsSalvarTempoBtn" class="primary" type="button">Salvar debounce</button>
-        <button id="opsRestaurarTempoBtn" type="button">Restaurar debounce</button>
+        <button id="opsRestaurarTempoBtn" type="button">Voltar ao padrao carregado de tempo</button>
         <button id="opsReloadBtn" type="button">Recarregar processo agora</button>
       </div>
       <div id="opsStatus" class="result-box">Carregando configuracao operacional.</div>
@@ -226,30 +226,55 @@
 
     <section id="trainingPanel" class="card admin-panel" hidden>
       <h2>Treinamento rapido da IA</h2>
-      <p class="muted">Crie proposta ou aplique regra nova sem sair do telefone atual.</p>
-      <div class="grid-2">
-        <div class="field">
-          <label for="trainerPhone">Telefone do professor</label>
-          <input id="trainerPhone" type="text" inputmode="numeric" placeholder="+55 12 99999-9999" />
+      <p class="muted">Separe quem pode ensinar da regra que sera criada. Um cadastro nao depende do outro.</p>
+      <div class="section-divider">
+        <div class="table-title">1. Telefones autorizados para ensinar</div>
+        <div class="grid-3">
+          <div class="field">
+            <label for="trainerManagePhone">Telefone autorizado</label>
+            <input id="trainerManagePhone" type="text" inputmode="numeric" placeholder="5512999999999" />
+          </div>
+          <div class="field">
+            <label for="trainerManageName">Nome</label>
+            <input id="trainerManageName" type="text" placeholder="Nome da pessoa" />
+          </div>
+          <div class="field">
+            <label for="trainerManageRole">Funcao</label>
+            <input id="trainerManageRole" type="text" placeholder="Operacao, cadastro, expedicao..." />
+          </div>
         </div>
-        <div class="field">
-          <label for="trainerName">Nome do professor</label>
-          <input id="trainerName" type="text" placeholder="Digite o nome se quiser identificar o professor" />
+        <div class="actions">
+          <button id="trainingTrainerAddBtn" class="primary" type="button">Salvar telefone autorizado</button>
+          <button id="trainingTrainerClearBtn" type="button">Limpar formulario</button>
         </div>
+        <div id="trainingTrainerList" class="stack-list"></div>
       </div>
-      <div class="field" style="margin-top:.9rem">
-        <label for="trainingInstruction">Nova instrucao</label>
-        <textarea id="trainingInstruction" placeholder="Ex.: Quando o motorista disser que esta livre, confirme a localizacao antes de encerrar o atendimento."></textarea>
-      </div>
-      <div class="actions">
-        <button id="trainingProposalBtn" type="button">Criar proposta</button>
-        <button id="trainingApplyBtn" class="primary" type="button">Aplicar agora</button>
-        <button id="trainingOpenEditorBtn" type="button">Abrir editor daqui</button>
+      <div class="section-divider">
+        <div class="table-title">2. Nova regra para a IA</div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="trainerPhone">Autor da regra - telefone opcional</label>
+            <input id="trainerPhone" type="text" inputmode="numeric" placeholder="Use um autorizado ou deixe vazio" />
+          </div>
+          <div class="field">
+            <label for="trainerName">Autor da regra - nome opcional</label>
+            <input id="trainerName" type="text" placeholder="Nome que vai aparecer no historico" />
+          </div>
+        </div>
+        <div class="field" style="margin-top:.9rem">
+          <label for="trainingInstruction">Regra nova</label>
+          <textarea id="trainingInstruction" placeholder="Ex.: Quando o motorista disser que esta livre, confirme a localizacao antes de encerrar o atendimento."></textarea>
+        </div>
+        <div class="actions">
+          <button id="trainingProposalBtn" type="button">Salvar como proposta para revisar</button>
+          <button id="trainingApplyBtn" class="primary" type="button">Aplicar regra agora</button>
+          <button id="trainingOpenEditorBtn" type="button">Abrir editor daqui</button>
+        </div>
       </div>
       <details class="mini-details">
-        <summary>Ver status do modo treinador</summary>
+        <summary>Ver pendencias e contadores</summary>
         <div class="details-grid" id="trainingStats">
-          <div class="mini-card"><span>Professores</span><strong id="statTrainers">-</strong></div>
+          <div class="mini-card"><span>Autorizados</span><strong id="statTrainers">-</strong></div>
           <div class="mini-card"><span>Pendencias</span><strong id="statPending">-</strong></div>
           <div class="mini-card"><span>Regras ativas</span><strong id="statLearned">-</strong></div>
         </div>
@@ -284,21 +309,15 @@
       <p class="muted">Tudo fica no mesmo painel, mas recolhido por padrao para nao sobrecarregar a operacao.</p>
 
       <details class="editor-fold">
-        <summary>Resumo tecnico</summary>
+        <summary>Resumo do painel</summary>
         <div class="editor-summary-grid">
           <div class="mini-card">
-            <span>Build</span>
+            <span>Versao</span>
             <strong id="editorBuildValue">-</strong>
           </div>
           <div class="mini-card">
-            <span>Modelo</span>
-            <strong id="editorProviderValue">-</strong>
-          </div>
-          <div class="mini-card editor-summary-wide">
-            <span>Servicos</span>
-            <div id="editorHealthChips" class="chip-list soft">
-              <span class="empty-inline">Nenhum status carregado.</span>
-            </div>
+            <span>Status geral</span>
+            <strong id="editorHealthValue">-</strong>
           </div>
         </div>
       </details>
@@ -322,9 +341,9 @@
         </div>
         <div class="actions">
           <button id="editorPromptSalvarBtn" class="primary" type="button">Salvar prompt principal</button>
-          <button id="editorPromptRestaurarBtn" type="button">Restaurar prompt</button>
+          <button id="editorPromptRestaurarBtn" type="button">Voltar ao texto carregado</button>
           <button id="editorOrquestracaoSalvarBtn" class="primary" type="button">Salvar estilo</button>
-          <button id="editorOrquestracaoRestaurarBtn" type="button">Restaurar estilo</button>
+          <button id="editorOrquestracaoRestaurarBtn" type="button">Voltar ao estilo carregado</button>
         </div>
         <div id="editorCoreStatus" class="result-box">Carregando textos centrais da IA.</div>
       </details>
@@ -338,7 +357,7 @@
         <div id="editorMensagensFluxo" class="flow-grid compact-flow"></div>
         <div class="actions">
           <button id="editorMensagensSalvarBtn" class="primary" type="button">Salvar mensagens</button>
-          <button id="editorMensagensRestaurarBtn" type="button">Restaurar mensagens</button>
+          <button id="editorMensagensRestaurarBtn" type="button">Voltar ao conjunto carregado</button>
           <span class="muted" id="editorMensagensMeta">Sem carga ainda.</span>
         </div>
         <div id="editorMensagensStatus" class="result-box">Carregando mensagens operacionais.</div>
@@ -399,8 +418,8 @@
             <select id="ocrDocSelect"></select>
           </div>
           <div class="field">
-            <label for="ocrDocId">ID interno</label>
-            <input id="ocrDocId" type="text" placeholder="cnh" />
+            <label for="ocrDocId">Codigo interno</label>
+            <input id="ocrDocId" type="text" placeholder="cnh" readonly />
           </div>
         </div>
         <div class="grid-3">
@@ -410,22 +429,22 @@
           </div>
           <div class="field">
             <label for="ocrDocTipo">Tipo do documento</label>
-            <input id="ocrDocTipo" type="text" />
+            <select id="ocrDocTipo"></select>
           </div>
           <div class="field">
-            <label for="ocrDocColecao">Colecao Directus</label>
-            <input id="ocrDocColecao" type="text" />
+            <label for="ocrDocColecao">Area do banco de dados</label>
+            <select id="ocrDocColecao"></select>
           </div>
         </div>
         <div class="field" style="margin-top:.9rem">
-          <label for="ocrDocDica">Dica para o prompt OCR</label>
+          <label for="ocrDocDica">Regra curta de leitura</label>
           <input id="ocrDocDica" type="text" placeholder="Ex.: priorize placa e RENAVAM" />
         </div>
         <div class="checks">
           <label><input id="ocrDocAtivo" type="checkbox" checked />Usar este documento no OCR</label>
         </div>
         <div class="field" style="margin-top:.9rem">
-          <label>Campos recuperados e destino no Directus</label>
+          <label>Campos lidos e onde salvar no banco de dados</label>
           <div id="ocrCamposList" class="stack-list"></div>
         </div>
         <div class="actions">

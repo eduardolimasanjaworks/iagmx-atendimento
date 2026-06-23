@@ -99,20 +99,8 @@
   }
 
   function renderResumo(health) {
-    const servicos = health?.servicos || {};
     $('editorBuildValue').textContent = health?.build || '-';
-    $('editorProviderValue').textContent = servicos.provedorAtivo || '-';
-    const chips = [
-      ['redis', 'Redis'],
-      ['postgres', 'Postgres'],
-      ['evolution', 'WhatsApp'],
-      ['qdrant', 'Qdrant'],
-      ['openrouter', 'OpenRouter'],
-      ['directus', 'Directus'],
-    ];
-    $('editorHealthChips').innerHTML = chips.map(([key, label]) => (
-      `<span class="pill">${label}: ${servicos[key] ? 'ok' : 'off'}</span>`
-    )).join('');
+    $('editorHealthValue').textContent = health?.status === 'ok' ? 'Online e operando' : 'Atencao necessaria';
   }
 
   function humanizarMensagem(key) {

@@ -12,6 +12,7 @@ import {
   removerOcrDocumento,
   type OcrDocumentoConfig,
 } from '../servicos/config-ocr-documentos.js';
+import { obterOcrOpcoes, validarOcrAssertivo } from '../servicos/ocr-opcoes.js';
 
 function exigirAdmin(
   req: Parameters<typeof painelAdmin>[0],
@@ -26,12 +27,13 @@ export async function rotasOcrDocumentos(app: FastifyInstance): Promise<void> {
   app.get('/api/admin/ocr-documentos', async (req, reply) => {
     if (!exigirAdmin(req, reply)) return;
     const meta = await obterOcrDocumentosMeta();
-    return { ok: true, ...meta };
+    return { ok: true, ...meta, opcoes: obterOcrOpcoes() };
   });
 
   app.post<{ Body: OcrDocumentoConfig }>('/api/admin/ocr-documentos', async (req, reply) => {
     if (!exigirAdmin(req, reply)) return;
     try {
+      validarOcrAssertivo(req.body);
       return {
         ok: true,
         documentos: await criarOcrDocumento(req.body),
@@ -47,6 +49,7 @@ export async function rotasOcrDocumentos(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       if (!exigirAdmin(req, reply)) return;
       try {
+        validarOcrAssertivo(req.body);
         return {
           ok: true,
           documentos: await atualizarOcrDocumento(req.params.id, req.body),
