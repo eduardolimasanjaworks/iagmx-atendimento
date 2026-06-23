@@ -10,7 +10,7 @@ import { extrairGpsDosItens, resolverCidadePorGps } from '../util/gps-localizaca
 import { obterConfigMensagensFluxo } from './config-mensagens-fluxo.js';
 
 const GMX_PROATIVA =
-  /atualizando nossa base de parceiros|confirma[cç][aã]o r[aá]pida/i;
+  /atualizando nossa base de parceiros|confirma[cç][aã]o r[aá]pida|verifica[cç][aã]o de status|como voc[eê] est[aá] agora.*dispon[ií]vel.*onde est[aá]/i;
 
 export interface ResultadoFluxoDisponibilidade {
   textoComFerramentas: string;
@@ -23,6 +23,9 @@ interface EstadoC7 {
   passo:
     | 'status'
     | 'vazio_local'
+    | 'indisponivel_local_atual'
+    | 'indisponivel_data'
+    | 'indisponivel_local_disponibilidade'
     | 'carregado_local_atual'
     | 'carregado_data'
     | 'carregado_local_disponibilidade';
@@ -34,6 +37,13 @@ type ContextoC7 =
   | { tipo: 'entrada' }
   | { tipo: 'aguardando_status' }
   | { tipo: 'vazio_localizacao' }
+  | { tipo: 'indisponivel_local_atual' }
+  | { tipo: 'indisponivel_data'; localizacaoAtual: string }
+  | {
+      tipo: 'indisponivel_local_disponibilidade';
+      localizacaoAtual: string;
+      dataPrevisaoDisponibilidade: string;
+    }
   | { tipo: 'carregado_local_atual' }
   | { tipo: 'carregado_data'; localizacaoAtual: string }
   | {
@@ -55,7 +65,10 @@ function fluxoJaConcluido(ultimaAssist: string): boolean {
 }
 
 function perguntouStatus(texto: string): boolean {
-  return /vazio ou.*carregado|carregado ou.*vazio/i.test(texto);
+  return (
+    /vazio ou.*carregado|carregado ou.*vazio/i.test(texto) ||
+    /verifica[cç][aã]o de status|como voc[eê] est[aá] agora.*dispon[ií]vel.*onde est[aá]/i.test(texto)
+  );
 }
 
 function perguntouLocalizacao(texto: string): boolean {
@@ -88,13 +101,22 @@ function ehVazio(mensagem: string): boolean {
   const t = normalizar(mensagem);
   return (
     /\b(vazio|livre|dispon[ií]vel|to\s+vazio|t[oô]\s+vazio|t[oô]\s+livre)\b/.test(t) &&
-    !/\bcarregad/.test(t)
+    !/\bcarregad/.test(t) &&
+    !ehIndisponivel(mensagem)
   );
 }
 
 function ehCarregado(mensagem: string): boolean {
   const t = normalizar(mensagem);
   return /\b(carregad|em viagem|to\s+cheio|to\s+carregado|t[oô]\s+carregad|cheio)\b/.test(t);
+}
+
+function ehIndisponivel(mensagem: string): boolean {
+  const t = normalizar(mensagem);
+  return (
+    /\b(indispon[ií]vel|sem disponibilidade)\b/.test(t) ||
+    /n[aã]o.+dispon[ií]vel/.test(t)
+  );
 }
 
 function localizacaoVaga(mensagem: string): boolean {
@@ -218,16 +240,32 @@ function inferirContexto(
   if (perguntouLocalDisponibilidade(ultimaAssist)) {
     const localizacaoAtual = extrairLocalAtualDoHistorico(historico) ?? '';
     const dataPrevisaoDisponibilidade = extrairDataDoHistorico(historico) ?? '';
-    return {
-      tipo: 'carregado_local_disponibilidade',
-      localizacaoAtual,
-      dataPrevisaoDisponibilidade,
-    };
+    return historicoTemStatusIndisponivel(historico)
+      ? {
+          tipo: 'indisponivel_local_disponibilidade',
+          localizacaoAtual,
+          dataPrevisaoDisponibilidade,
+        }
+      : {
+          tipo: 'carregado_local_disponibilidade',
+          localizacaoAtual,
+          dataPrevisaoDisponibilidade,
+        };
   }
 
   if (perguntouData(ultimaAssist)) {
     const localizacaoAtual = extrairLocalAtualDoHistorico(historico) ?? '';
-    return { tipo: 'carregado_data', localizacaoAtual };
+    if (/vai estar dispon[ií]vel|qual cidade.*vai estar dispon[ií]vel/i.test(ultimaAssist)) {
+      return {
+        tipo: 'indisponivel_local_disponibilidade',
+        localizacaoAtual,
+        dataPrevisaoDisponibilidade: extrairDataDoHistorico(historico) ?? '',
+      };
+    }
+    const usuarioFalouIndisponivel = historicoTemStatusIndisponivel(historico);
+    return usuarioFalouIndisponivel
+      ? { tipo: 'indisponivel_data', localizacaoAtual }
+      : { tipo: 'carregado_data', localizacaoAtual };
   }
 
   if (perguntouLocalAtualCarregado(ultimaAssist)) return { tipo: 'carregado_local_atual' };
@@ -272,6 +310,10 @@ function extrairDataDoHistorico(historico: Array<{ role: string; content: string
   return null;
 }
 
+function historicoTemStatusIndisponivel(historico: Array<{ role: string; content: string }>): boolean {
+  return [...historico].reverse().some((h) => h.role === 'user' && ehIndisponivel(h.content));
+}
+
 function montarResultado(
   visivel: string,
   ferramenta?: { ferramenta: string; dados: Record<string, unknown> },
@@ -304,6 +346,21 @@ export async function tentarFluxoDisponibilidade(opts: {
 
   if (!contexto && estadoRedis) {
     if (estadoRedis.passo === 'vazio_local') contexto = { tipo: 'vazio_localizacao' };
+    if (estadoRedis.passo === 'indisponivel_local_atual') contexto = { tipo: 'indisponivel_local_atual' };
+    if (estadoRedis.passo === 'indisponivel_data' && estadoRedis.localizacaoAtual) {
+      contexto = { tipo: 'indisponivel_data', localizacaoAtual: estadoRedis.localizacaoAtual };
+    }
+    if (
+      estadoRedis.passo === 'indisponivel_local_disponibilidade' &&
+      estadoRedis.localizacaoAtual &&
+      estadoRedis.dataPrevisaoDisponibilidade
+    ) {
+      contexto = {
+        tipo: 'indisponivel_local_disponibilidade',
+        localizacaoAtual: estadoRedis.localizacaoAtual,
+        dataPrevisaoDisponibilidade: estadoRedis.dataPrevisaoDisponibilidade,
+      };
+    }
     if (estadoRedis.passo === 'carregado_local_atual') contexto = { tipo: 'carregado_local_atual' };
     if (estadoRedis.passo === 'carregado_data' && estadoRedis.localizacaoAtual) {
       contexto = { tipo: 'carregado_data', localizacaoAtual: estadoRedis.localizacaoAtual };
@@ -330,12 +387,27 @@ export async function tentarFluxoDisponibilidade(opts: {
   }
 
   if (contexto.tipo === 'aguardando_status') {
-    if (ehRespostaAmbiguaStatus(mensagem) || (!ehVazio(mensagem) && !ehCarregado(mensagem))) {
+    if (
+      ehRespostaAmbiguaStatus(mensagem) ||
+      (!ehVazio(mensagem) && !ehCarregado(mensagem) && !ehIndisponivel(mensagem))
+    ) {
       return montarResultado(msgs.c7_duvida_status, undefined, 'duvida_status');
     }
     if (ehVazio(mensagem)) {
       await salvarEstadoFluxo(telefone, { passo: 'vazio_local' } satisfies EstadoC7);
       return montarResultado(msgs.c7_pede_localizacao, undefined, 'pede_local');
+    }
+    if (ehIndisponivel(mensagem)) {
+      const localizacaoAtual = extrairLocalizacaoTexto(mensagem);
+      if (localizacaoAtual && !localizacaoVaga(mensagem)) {
+        await salvarEstadoFluxo(
+          telefone,
+          { passo: 'indisponivel_data', localizacaoAtual } satisfies EstadoC7,
+        );
+        return montarResultado(msgs.c7_pergunta_data, undefined, 'pede_data_indisponivel');
+      }
+      await salvarEstadoFluxo(telefone, { passo: 'indisponivel_local_atual' } satisfies EstadoC7);
+      return montarResultado(msgs.c7_pede_localizacao, undefined, 'pede_local_indisponivel');
     }
     if (ehCarregado(mensagem)) {
       await salvarEstadoFluxo(telefone, { passo: 'carregado_local_atual' } satisfies EstadoC7);
@@ -388,6 +460,68 @@ export async function tentarFluxoDisponibilidade(opts: {
         },
       },
       'vazio_concluido',
+    );
+  }
+
+  if (contexto.tipo === 'indisponivel_local_atual') {
+    const localizacaoAtual = extrairLocalizacaoTexto(mensagem);
+    if (!localizacaoAtual || localizacaoVaga(mensagem)) {
+      return montarResultado(msgs.c7_local_invalida, undefined, 'local_indisponivel_invalida');
+    }
+    await salvarEstadoFluxo(
+      telefone,
+      { passo: 'indisponivel_data', localizacaoAtual } satisfies EstadoC7,
+    );
+    return montarResultado(msgs.c7_pergunta_data, undefined, 'pede_data_indisponivel');
+  }
+
+  if (contexto.tipo === 'indisponivel_data') {
+    if (dataVaga(mensagem)) {
+      return montarResultado(msgs.c7_data_vaga, undefined, 'data_indisponivel_vaga');
+    }
+    const dataIso = parseDataLiberacao(mensagem);
+    if (!dataIso) {
+      return montarResultado(msgs.c7_data_vaga, undefined, 'data_indisponivel_invalida');
+    }
+    await salvarEstadoFluxo(
+      telefone,
+      {
+        passo: 'indisponivel_local_disponibilidade',
+        localizacaoAtual: contexto.localizacaoAtual,
+        dataPrevisaoDisponibilidade: dataIso,
+      } satisfies EstadoC7,
+    );
+    return montarResultado(
+      msgs.c7_pergunta_local_disponibilidade,
+      undefined,
+      'pede_local_disponibilidade_indisponivel',
+    );
+  }
+
+  if (contexto.tipo === 'indisponivel_local_disponibilidade') {
+    const localDisponibilidade = extrairLocalizacaoTexto(mensagem);
+    if (!localDisponibilidade || localizacaoVaga(mensagem)) {
+      return montarResultado(
+        msgs.c7_pergunta_local_disponibilidade,
+        undefined,
+        'local_disponibilidade_indisponivel_invalida',
+      );
+    }
+    await limparEstadoFluxo(telefone);
+    return montarResultado(
+      msgs.c7_fechamento,
+      {
+        ferramenta: 'registrar_disponibilidade',
+        dados: {
+          disponivel: false,
+          status: 'indisponivel',
+          localizacao_atual: contexto.localizacaoAtual,
+          local_disponibilidade: localDisponibilidade,
+          data_previsao_disponibilidade: contexto.dataPrevisaoDisponibilidade,
+          telefone,
+        },
+      },
+      'indisponivel_concluido',
     );
   }
 

@@ -4,6 +4,7 @@ import { directusConfigurado, directusListar } from './directus.js';
 import { tentarEnviarResposta } from './enviar-resposta.js';
 import { adicionarAoHistorico } from './historico.js';
 import { marcarEnvioIa } from './envio-ia.js';
+import { obterConfigMensagensFluxo, interpolarMensagem } from './config-mensagens-fluxo.js';
 import { logEvento } from '../util/log-eventos.js';
 import { normalizarTelefone, telefoneParaJid } from '../util/telefone.js';
 
@@ -125,7 +126,35 @@ function normalizarMotoristaId(valor: DisponibilidadeAtual['motorista_id']): num
   return null;
 }
 
-function montarMensagemContatoProativo(item: ItemContatoProativo): string {
+function limparTemplateRenderizado(texto: string): string {
+  return texto
+    .split('\n')
+    .map((linha) => linha.replace(/[ \t]+$/g, '').trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export function montarMensagemContatoProativo(item: Pick<ItemContatoProativo, 'localizacao_atual' | 'nome' | 'cidade' | 'estado' | 'operacao'>, opts?: {
+  templateComReferencia?: string | null;
+  templateSemReferencia?: string | null;
+}): string {
+  const template = item.localizacao_atual
+    ? String(opts?.templateComReferencia ?? '').trim()
+    : String(opts?.templateSemReferencia ?? '').trim();
+
+  if (template) {
+    return limparTemplateRenderizado(
+      interpolarMensagem(template, {
+        localizacao_atual: item.localizacao_atual ?? '',
+        nome: item.nome ?? '',
+        cidade: item.cidade ?? '',
+        estado: item.estado ?? '',
+        operacao: item.operacao ?? '',
+      }),
+    );
+  }
+
   return item.localizacao_atual
     ? `Bom dia parceiro, a GMX esta atualizando a localizacao da frota de hoje, me confirma por favor sua localizacao atual, no ultimo registro voce estava em ${item.localizacao_atual}`
     : 'Bom dia parceiro, a GMX esta atualizando a localizacao da frota de hoje, me confirma por favor sua localizacao atual com cidade e estado';
@@ -483,7 +512,11 @@ export async function dispararContatoProativo(
     throw new Error('Somente itens aprovados podem ser disparados');
   }
 
-  const texto = montarMensagemContatoProativo(item);
+  const mensagens = await obterConfigMensagensFluxo();
+  const texto = montarMensagemContatoProativo(item, {
+    templateComReferencia: mensagens.contato_proativo_localizacao_com_referencia,
+    templateSemReferencia: mensagens.contato_proativo_localizacao_sem_referencia,
+  });
   const remoteJid = telefoneParaJid(item.telefone);
   const envio = await tentarEnviarResposta(item.telefone, texto, config.evolutionInstance, {
     remoteJid,

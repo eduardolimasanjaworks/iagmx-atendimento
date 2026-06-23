@@ -260,9 +260,6 @@ export async function resolverDisponibilidadeComRedundancia(opts: {
       (campo) => campo !== 'data_previsao_disponibilidade' && campo !== 'local_disponibilidade',
     );
     faltando.splice(0, faltando.length, ...semCampoCarregado);
-  } else if (status === 'indisponivel') {
-    const semLocalDisponibilidade = faltando.filter((campo) => campo !== 'local_disponibilidade');
-    faltando.splice(0, faltando.length, ...semLocalDisponibilidade);
   }
 
   const localizacaoAtual = primeiroNaoNulo(...extracoes.map((item) => item.localizacao_atual));

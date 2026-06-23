@@ -542,7 +542,9 @@ async function processarLote(remoteJid: string): Promise<void> {
               consenso.status !== 'indefinido' &&
               consenso.localizacaoAtual &&
               (consenso.status === 'disponivel' ||
-                (consenso.status === 'indisponivel' && consenso.dataPrevisaoDisponibilidade) ||
+                (consenso.status === 'indisponivel' &&
+                  consenso.dataPrevisaoDisponibilidade &&
+                  consenso.localDisponibilidade) ||
                 (consenso.status === 'carregado' &&
                   consenso.dataPrevisaoDisponibilidade &&
                   consenso.localDisponibilidade))

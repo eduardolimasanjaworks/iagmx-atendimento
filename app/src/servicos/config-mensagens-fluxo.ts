@@ -9,6 +9,9 @@ const pool = new pg.Pool({ connectionString: config.databaseUrl });
 const CHAVE = 'mensagens_fluxo';
 
 export interface ConfigMensagensFluxo {
+  contato_proativo_localizacao_com_referencia: string;
+  contato_proativo_localizacao_sem_referencia: string;
+  oferta_proativa_template: string;
   c7_pergunta_status: string;
   c7_duvida_status: string;
   c7_pede_localizacao: string;
@@ -56,6 +59,12 @@ export interface ConfigMensagensFluxo {
 }
 
 export const MENSAGENS_FLUXO_PADRAO: ConfigMensagensFluxo = {
+  contato_proativo_localizacao_com_referencia:
+    'Bom dia parceiro, a GMX esta atualizando a localizacao da frota de hoje, me confirma por favor sua localizacao atual, no ultimo registro voce estava em {{localizacao_atual}}',
+  contato_proativo_localizacao_sem_referencia:
+    'Bom dia parceiro, a GMX esta atualizando a localizacao da frota de hoje, me confirma por favor sua localizacao atual com cidade e estado',
+  oferta_proativa_template:
+    'Adriano - GMX / CargoX\n\nTemos carga {{origem}} -> {{destino}}\n{{linha_produto}}\n{{linha_operacao}}\nValor: {{valor_ofertado}}\n\nTem interesse?',
   c7_pergunta_status: 'Show parceiro! Você está vazio ou já está carregado?',
   c7_duvida_status: 'Fiquei na dúvida parceiro, você está vazio ou carregado?',
   c7_pede_localizacao:
@@ -139,6 +148,13 @@ function normalizar(
 ): ConfigMensagensFluxo {
   const base = { ...MENSAGENS_FLUXO_PADRAO, ...(partial ?? {}) } as Record<string, unknown>;
   return {
+    contato_proativo_localizacao_com_referencia: String(
+      base.contato_proativo_localizacao_com_referencia,
+    ).trim(),
+    contato_proativo_localizacao_sem_referencia: String(
+      base.contato_proativo_localizacao_sem_referencia,
+    ).trim(),
+    oferta_proativa_template: String(base.oferta_proativa_template).trim(),
     c7_pergunta_status: String(base.c7_pergunta_status).trim(),
     c7_duvida_status: String(base.c7_duvida_status).trim(),
     c7_pede_localizacao: String(base.c7_pede_localizacao).trim(),

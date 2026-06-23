@@ -1,6 +1,6 @@
 /**
  * Acoes admin embutidas no monitor por telefone.
- * Unifica jornada, reset de contato e treinamento rapido na mesma tela.
+ * Unifica jornada, operacao, pausa, treinamento e editor na mesma tela.
  * Reaproveita as APIs admin existentes para evitar logica paralela.
  */
 (() => {
@@ -100,37 +100,6 @@
     }
   }
 
-  async function resetarContato() {
-    const telefone = telefoneAtual();
-    if (!telefone) return setBox('resetContatoResultado', 'Informe o telefone do topo antes de apagar o historico', 'warn');
-    const btn = $('resetContatoBtn');
-    btn.disabled = true;
-    setBox('resetContatoResultado', 'Limpando historico operacional do contato...');
-    try {
-      const data = await state.json('/api/admin/contatos/resetar-historico', {
-        method: 'POST',
-        body: JSON.stringify({ telefone }),
-      });
-      await window.PhoneMonitorPage?.recarregar?.();
-      setBox(
-        'resetContatoResultado',
-        [
-          data.mensagem || 'Historico apagado',
-          '',
-          `Historico: ${data.resultado.historicoLimpo ? 'sim' : 'nao'}`,
-          `Debounce removido: ${data.resultado.mensagensDebounceRemovidas}`,
-          `Fila removida: ${data.resultado.respostasPendentesRemovidas}`,
-          `Traces removidos: ${data.resultado.tracesRemovidos}`,
-        ].join('\n'),
-        'ok',
-      );
-    } catch (error) {
-      setBox('resetContatoResultado', error.message || 'Falha ao apagar historico do contato', 'warn');
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
   function renderPendencias(itens) {
     const root = $('trainingPendencias');
     if (!itens.length) {
@@ -213,16 +182,26 @@
     }
   }
 
+  function ativarPainel(alvo) {
+    document.querySelectorAll('[data-panel]').forEach((item) => {
+      item.classList.toggle('active', item.dataset.panel === alvo);
+    });
+    ['journeyPanel', 'opsPanel', 'pausePanel', 'trainingPanel', 'simulatorPanel', 'editorPanel'].forEach((id) => {
+      $(id).hidden = id !== alvo;
+    });
+  }
+
+  function painelInicial() {
+    const painel = new URLSearchParams(window.location.search).get('painel');
+    return ['journeyPanel', 'opsPanel', 'pausePanel', 'trainingPanel', 'simulatorPanel', 'editorPanel'].includes(`${painel}Panel`)
+      ? `${painel}Panel`
+      : 'journeyPanel';
+  }
+
   function conectarEventos() {
     document.querySelectorAll('[data-panel]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const alvo = btn.dataset.panel;
-        document.querySelectorAll('[data-panel]').forEach((item) => {
-          item.classList.toggle('active', item === btn);
-        });
-        ['journeyPanel', 'resetPanel', 'trainingPanel', 'editorPanel'].forEach((id) => {
-          $(id).hidden = id !== alvo;
-        });
+        ativarPainel(btn.dataset.panel);
       });
     });
     $('jornada').addEventListener('change', atualizarMensagemPadrao);
@@ -230,7 +209,6 @@
     $('recarregarJornadasBtn').addEventListener('click', () => carregarJornadas().catch((error) => {
       setBox('journeyStatus', error.message || 'Falha ao recarregar jornadas', 'warn');
     }));
-    $('resetContatoBtn').addEventListener('click', resetarContato);
     $('trainingProposalBtn').addEventListener('click', () => enviarInstrucao(false));
     $('trainingApplyBtn').addEventListener('click', () => enviarInstrucao(true));
     $('trainingPendencias').addEventListener('click', (event) => {
@@ -245,6 +223,7 @@
     state.json = window.PhoneMonitorPage?.json?.bind(window.PhoneMonitorPage) || window.IagmxPainelAuth?.json;
     if (!state.json) return;
     conectarEventos();
+    ativarPainel(painelInicial());
     await Promise.all([carregarJornadas(), carregarTreinamento()]);
   }
 

@@ -6,19 +6,19 @@
   <title>Monitor por telefone - IA GMX</title>
   <link rel="stylesheet" href="/phone.css" />
   <link rel="stylesheet" href="/phone-monitor.css" />
+  <link rel="stylesheet" href="/phone-simulator.css" />
   <link rel="stylesheet" href="/phone-editor.css" />
 </head>
 <body>
   <div class="wrap">
     <header class="header">
       <div>
-        <h1>Monitor por telefone</h1>
-        <p class="muted">Acompanhe um ou varios contatos ao mesmo tempo, com filtros rapidos e acoes operacionais separadas.</p>
+        <h1>Central unica do contato</h1>
+        <p class="muted">Acompanhe o contato, pause a IA, inicie jornadas e rode simulacoes sem sair do mesmo painel.</p>
       </div>
       <nav class="links">
-        <a href="/pipeline">Etapas</a>
-        <a href="/whatsapp">WhatsApp</a>
         <a href="/">Config</a>
+        <a href="/pipeline">Etapas</a>
       </nav>
     </header>
 
@@ -68,8 +68,10 @@
 
     <div class="panel-switch" role="tablist" aria-label="Acoes do contato">
       <button class="panel-tab active" type="button" data-panel="journeyPanel">Jornada</button>
-      <button class="panel-tab" type="button" data-panel="resetPanel">Reset</button>
+      <button class="panel-tab" type="button" data-panel="opsPanel">Operacao</button>
+      <button class="panel-tab" type="button" data-panel="pausePanel">Pausa</button>
       <button class="panel-tab" type="button" data-panel="trainingPanel">Treinamento</button>
+      <button class="panel-tab" type="button" data-panel="simulatorPanel">Simulador</button>
       <button class="panel-tab" type="button" data-panel="editorPanel">Editor</button>
     </div>
 
@@ -98,18 +100,85 @@
       <div class="actions">
         <button id="iniciarBtn" class="primary" type="button">Iniciar jornada</button>
         <button id="recarregarJornadasBtn" type="button">Recarregar jornadas</button>
-        <a id="abrirJourneyLink" class="ghost" href="/journey.html">Tela antiga</a>
       </div>
       <div id="journeyStatus" class="result-box">Aguardando carregamento das jornadas.</div>
     </section>
 
-    <section id="resetPanel" class="card admin-panel" hidden>
-      <h2>Apagar historico do contato</h2>
-      <p class="muted">Limpa historico operacional, fila, debounce, traces e o estado visual do monitor.</p>
-      <div class="actions">
-        <button id="resetContatoBtn" type="button">Apagar historico deste contato</button>
+    <section id="opsPanel" class="card admin-panel" hidden>
+      <h2>Operacao avancada</h2>
+      <p class="muted">Esses tempos afetam o WhatsApp real: atraso inicial, digitando, pausas entre bolhas e debounce para consolidar entrada antes de gerar a resposta.</p>
+      <div class="grid-2">
+        <div class="field">
+          <label for="opsAtrasoInicialMin">Atraso inicial minimo (ms)</label>
+          <input id="opsAtrasoInicialMin" type="number" min="0" step="1000" />
+        </div>
+        <div class="field">
+          <label for="opsAtrasoInicialMax">Atraso inicial maximo (ms)</label>
+          <input id="opsAtrasoInicialMax" type="number" min="0" step="1000" />
+        </div>
       </div>
-      <div id="resetContatoResultado" class="result-box">Nenhum reset executado nesta sessao.</div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="opsDelayMin">Delay minimo entre mensagens (ms)</label>
+          <input id="opsDelayMin" type="number" min="0" step="100" />
+        </div>
+        <div class="field">
+          <label for="opsDelayMax">Delay maximo entre mensagens (ms)</label>
+          <input id="opsDelayMax" type="number" min="0" step="100" />
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="opsDigMin">Digitando minimo (ms)</label>
+          <input id="opsDigMin" type="number" min="0" step="100" />
+        </div>
+        <div class="field">
+          <label for="opsDigMax">Digitando maximo (ms)</label>
+          <input id="opsDigMax" type="number" min="0" step="100" />
+        </div>
+      </div>
+      <div class="checks">
+        <label><input id="opsDigAtivo" type="checkbox" />Mostrar digitando antes da mensagem</label>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="opsDebounceMs">Debounce (ms)</label>
+          <input id="opsDebounceMs" type="number" min="300" max="10000" step="100" />
+        </div>
+        <div class="field">
+          <label for="opsDebounceWorker">Worker poll (ms)</label>
+          <input id="opsDebounceWorker" type="number" min="100" max="5000" step="50" />
+        </div>
+      </div>
+      <div class="actions">
+        <button id="opsSalvarEnvioBtn" class="primary" type="button">Salvar humanizacao</button>
+        <button id="opsRestaurarEnvioBtn" type="button">Restaurar humanizacao</button>
+        <button id="opsSalvarTempoBtn" class="primary" type="button">Salvar debounce</button>
+        <button id="opsRestaurarTempoBtn" type="button">Restaurar debounce</button>
+        <button id="opsReloadBtn" type="button">Recarregar processo agora</button>
+      </div>
+      <div id="opsStatus" class="result-box">Carregando configuracao operacional.</div>
+    </section>
+
+    <section id="pausePanel" class="card admin-panel" hidden>
+      <h2>Pausar conversa deste contato</h2>
+      <p class="muted">Interrompe as respostas da IA somente para o contato em foco, sem afetar os outros telefones selecionados.</p>
+      <div class="grid-2">
+        <div class="field">
+          <label for="pausePhoneView">Contato em foco</label>
+          <input id="pausePhoneView" type="text" readonly />
+        </div>
+        <div class="field">
+          <label for="pauseReason">Motivo da pausa</label>
+          <input id="pauseReason" type="text" placeholder="Ex.: atendimento humano em andamento" />
+        </div>
+      </div>
+      <div class="actions">
+        <button id="pauseContactBtn" type="button">Pausar este contato</button>
+        <button id="resumeContactBtn" class="primary" type="button">Retomar este contato</button>
+        <button id="refreshPauseBtn" type="button">Atualizar estado</button>
+      </div>
+      <div id="pauseStatus" class="result-box">Nenhum contato consultado ainda.</div>
     </section>
 
     <section id="trainingPanel" class="card admin-panel" hidden>
@@ -144,6 +213,27 @@
         <div id="trainingPendencias" class="result-box">Nenhuma pendencia de treinamento agora.</div>
       </details>
       <div id="trainingStatus" class="result-box">Carregando status do modo treinador.</div>
+    </section>
+
+    <section id="simulatorPanel" class="card admin-panel" hidden>
+      <div class="card-head">
+        <div>
+          <h2>Carrossel de chats simulados</h2>
+          <div class="hint">Use este bloco para revisar o roteiro da IA de forma limpa, sem abrir uma tela separada.</div>
+        </div>
+        <div class="muted" id="simCurrentConversationMeta">Cenario 7</div>
+      </div>
+      <div id="simConversationTabs" class="pill-row"></div>
+      <div class="conversation-meta" id="simConversationMeta"></div>
+      <div class="progress-wrap">
+        <div class="progress-meta">
+          <span>Andamento da rotina</span>
+          <span id="simConversationProgressLabel">100%</span>
+        </div>
+        <div class="progress-bar"><span id="simConversationProgressBar" style="width:100%"></span></div>
+      </div>
+      <div id="simMessages" class="messages"></div>
+      <div id="simAuditPanel" class="audit-stack"></div>
     </section>
 
     <section id="editorPanel" class="card admin-panel" hidden>
@@ -315,6 +405,9 @@
   <script src="/painel-auth.js"></script>
   <script src="/phone.js"></script>
   <script src="/phone-admin.js"></script>
+  <script src="/phone-ops.js"></script>
+  <script src="/phone-pause.js"></script>
+  <script src="/phone-simulator.js"></script>
   <script src="/phone-editor.js"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
+import { obterConfigMensagensFluxo } from '../servicos/config-mensagens-fluxo.js';
 import { montarMensagemOferta } from '../servicos/oferta-disparo.js';
 import { tentarEnviarResposta } from '../servicos/enviar-resposta.js';
 import { adicionarAoHistorico } from '../servicos/historico.js';
@@ -53,13 +54,14 @@ export async function rotasDispararOferta(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ erro: 'valor_ofertado obrigatório' });
     }
 
+    const mensagens = await obterConfigMensagensFluxo();
     const texto = montarMensagemOferta({
       origem: body.origem.trim(),
       destino: body.destino.trim(),
       operacao: body.operacao,
       valorOfertado: Number(body.valor_ofertado),
       produto: body.produto,
-    });
+    }, mensagens.oferta_proativa_template);
 
     const remoteJid = telefoneParaJid(telefone);
     const eventId = novoEventoHistoricoId();

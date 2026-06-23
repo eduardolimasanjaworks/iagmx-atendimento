@@ -1,100 +1,12 @@
-<!--
-  Tela dedicada para iniciar jornadas reais por telefone.
-  Usa autenticacao do painel do IAGMX e fala apenas com rotas admin.
-  Mantem o fluxo simples para teste rapido perto de producao.
--->
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Jornadas de Teste | IAGMX</title>
-    <style>
-      :root { color-scheme: light; --bg:#f4f7fb; --card:#ffffff; --muted:#62748b; --line:#d7e0ee; --ok:#15803d; --warn:#b45309; --text:#132033; }
-      * { box-sizing: border-box; }
-      body { margin:0; font-family:Inter,Arial,sans-serif; background:linear-gradient(180deg,#f8fbff,#f1f5f9); color:var(--text); }
-      .wrap { max-width:980px; margin:0 auto; padding:32px 20px 56px; }
-      .top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:20px; }
-      .top a { color:#2563eb; text-decoration:none; }
-      .card { background:rgba(255,255,255,.94); border:1px solid var(--line); border-radius:18px; padding:18px; margin-bottom:18px; box-shadow:0 12px 30px rgba(15,23,42,.07); }
-      h1,h2,p { margin:0; }
-      .muted { color:var(--muted); }
-      .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-top:16px; }
-      label { display:block; font-size:.92rem; color:var(--text); margin-bottom:6px; }
-      input,select,textarea { width:100%; border:1px solid var(--line); border-radius:12px; background:#f8fbff; color:var(--text); padding:12px 13px; font:inherit; }
-      textarea { min-height:150px; resize:vertical; }
-      .checks { display:flex; flex-wrap:wrap; gap:14px; margin-top:14px; }
-      .checks label { display:flex; gap:10px; align-items:flex-start; margin:0; cursor:pointer; }
-      .checks input { width:auto; margin-top:2px; }
-      .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
-      button { border:none; border-radius:12px; padding:12px 16px; font:inherit; font-weight:700; cursor:pointer; }
-      .primary { background:#2563eb; color:white; }
-      .ghost { background:#eef3fb; color:#1e3a8a; border:1px solid var(--line); }
-      .info { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:14px; }
-      .info .box { border:1px solid var(--line); border-radius:14px; padding:12px; background:#f8fbff; }
-      .info strong { display:block; font-size:1rem; margin-top:4px; }
-      .result { white-space:pre-wrap; font-family:ui-monospace,SFMono-Regular,monospace; font-size:.9rem; background:#f8fbff; border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:14px; min-height:120px; }
-      .tag { display:inline-block; font-size:.78rem; padding:4px 8px; border-radius:999px; background:#dbeafe; color:#1d4ed8; margin-bottom:8px; }
-      .ok { color:var(--ok); }
-      .warn { color:var(--warn); }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="top">
-        <div>
-          <h1>Jornadas de Teste</h1>
-          <p class="muted">Seleciona a jornada, garante o motorista no Directus real e dispara a primeira mensagem no WhatsApp</p>
-        </div>
-        <a href="/index.html">Voltar ao painel</a>
-      </div>
-
-      <div class="card">
-        <span class="tag">Fluxo real</span>
-        <p class="muted">A mensagem so entra no historico quando o envio real acontecer. Se o WhatsApp estiver desconectado, a tela retorna a falha em vez de fingir sucesso.</p>
-      </div>
-
-      <div class="card">
-        <h2>Iniciar Atendimento</h2>
-        <div class="grid">
-          <div>
-            <label for="telefone">Telefone</label>
-            <input id="telefone" type="text" inputmode="numeric" placeholder="+55 12 99791-8525" />
-          </div>
-          <div>
-            <label for="nomeMotorista">Nome do motorista</label>
-            <input id="nomeMotorista" type="text" placeholder="Opcional" />
-          </div>
-          <div>
-            <label for="jornada">Jornada</label>
-            <select id="jornada"></select>
-          </div>
-        </div>
-
-        <div class="info" id="jornadaInfo"></div>
-
-        <div style="margin-top:16px">
-          <label for="mensagemInicial">Mensagem inicial</label>
-          <textarea id="mensagemInicial"></textarea>
-        </div>
-
-        <div class="checks">
-          <label><input id="resetarHistorico" type="checkbox" checked />Limpar historico operacional antes de iniciar</label>
-          <label><input id="marcarComoTeste" type="checkbox" checked />Marcar cadastro com tag padronizada em observacao</label>
-        </div>
-
-        <div class="actions">
-          <button id="iniciarBtn" class="primary" type="button">Iniciar jornada</button>
-          <button id="resetBtn" class="ghost" type="button">Apagar historico</button>
-          <button id="recarregarBtn" class="ghost" type="button">Recarregar jornadas</button>
-          <a id="monitorLink" class="ghost" href="/phone.html" style="display:inline-flex;align-items:center;justify-content:center;padding:12px 16px;border-radius:12px;text-decoration:none">Abrir monitor do telefone</a>
-        </div>
-
-        <div id="status" class="result">Carregando jornadas...</div>
-      </div>
-    </div>
-
-    <script src="/painel-auth.js"></script>
-    <script type="module" src="/journey.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redirecionando para /phone</title>
+  <meta http-equiv="refresh" content="0; url=/phone?painel=journey" />
+</head>
+<body>
+  <p>Redirecionando para <a href="/phone?painel=journey">/phone?painel=journey</a>...</p>
+</body>
 </html>

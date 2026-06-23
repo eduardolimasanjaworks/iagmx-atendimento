@@ -146,7 +146,14 @@ export async function rotasAdmin(app: FastifyInstance): Promise<void> {
   app.put<{ Body: Partial<typeof HUMANIZACAO_PADRAO> }>('/api/config/envio', async (req, reply) => {
     if (!exigirAdmin(req, reply)) return;
     const body = req.body ?? {};
-    const nums = ['delayMinMs', 'delayMaxMs', 'digitandoMinMs', 'digitandoMaxMs'] as const;
+    const nums = [
+      'atrasoInicialMinMs',
+      'atrasoInicialMaxMs',
+      'delayMinMs',
+      'delayMaxMs',
+      'digitandoMinMs',
+      'digitandoMaxMs',
+    ] as const;
     for (const k of nums) {
       if (body[k] !== undefined && (typeof body[k] !== 'number' || body[k] < 0)) {
         return reply.status(400).send({ erro: `${k} deve ser número >= 0` });

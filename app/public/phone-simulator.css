@@ -1,0 +1,201 @@
+/**
+ * Simulador embutido no /phone para evitar telas paralelas.
+ * Mantem o foco em conversa, prompt completo e impacto operacional.
+ * O objetivo e revisar fluxos sem poluir a interface principal.
+ */
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  margin: 1rem 0 .85rem;
+}
+
+.conversation-meta {
+  display: grid;
+  gap: .25rem;
+  color: var(--muted);
+  font-size: .84rem;
+  margin-bottom: .85rem;
+}
+
+.progress-wrap { margin-bottom: 1rem; }
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: .5rem;
+  font-size: .78rem;
+  color: var(--muted);
+  margin-bottom: .3rem;
+}
+
+.progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #60a5fa 100%);
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: .8rem;
+  margin-top: 1rem;
+}
+
+.message-row {
+  display: flex;
+}
+
+.message-row.driver {
+  justify-content: flex-end;
+}
+
+.bubble {
+  width: min(92%, 760px);
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  padding: .82rem .9rem;
+  text-align: left;
+}
+
+.bubble.assistant {
+  cursor: pointer;
+}
+
+.bubble.assistant.selected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.message-row.driver .bubble {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.bubble-head {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .35rem;
+  font-size: .74rem;
+  color: var(--muted);
+}
+
+.bubble-body {
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.bubble-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin-top: .55rem;
+}
+
+.tag {
+  padding: .18rem .42rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: .7rem;
+  color: var(--muted);
+}
+
+.audit-stack {
+  display: grid;
+  gap: .75rem;
+  margin-top: 1rem;
+}
+
+.audit-box {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  padding: .85rem .9rem;
+}
+
+.audit-label {
+  color: var(--muted);
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: .3rem;
+}
+
+.section-copy {
+  display: block;
+  color: var(--muted);
+  font-size: .76rem;
+  margin-bottom: .55rem;
+}
+
+.audit-value,
+.code-block {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-size: .9rem;
+}
+
+.code-block {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: .85rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: .78rem;
+}
+
+.object-list,
+.structured-grid {
+  display: grid;
+  gap: .7rem;
+}
+
+.structured-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mini-card,
+.structured-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: .8rem;
+}
+
+.structured-card .k {
+  color: var(--muted);
+  font-size: .72rem;
+  text-transform: uppercase;
+  margin-bottom: .15rem;
+}
+
+.structured-card .v {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.helper-line {
+  display: block;
+  margin-top: .5rem;
+  color: var(--muted);
+  font-size: .76rem;
+}
+
+@media (max-width: 760px) {
+  .structured-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bubble {
+    width: 100%;
+  }
+}

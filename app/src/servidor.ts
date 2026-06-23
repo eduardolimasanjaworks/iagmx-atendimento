@@ -109,7 +109,7 @@ export async function criarServidor() {
   });
 
   app.get('/pipeline', async (_req, reply) => {
-    return reply.redirect('/pipeline.html');
+    return reply.redirect('/phone?painel=simulador');
   });
 
   app.get('/jornadas', async (_req, reply) => {

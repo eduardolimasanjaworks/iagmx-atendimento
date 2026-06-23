@@ -111,6 +111,37 @@
     .status-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .compact-summary {
+      padding: .85rem 1rem;
+    }
+    .compact-summary-line {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .75rem;
+      align-items: start;
+    }
+    .compact-summary-item {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: .72rem .8rem;
+      background: var(--surface2);
+    }
+    .compact-summary-item strong {
+      display: block;
+      font-size: .96rem;
+    }
+    .compact-summary-item span {
+      display: block;
+      color: var(--muted);
+      font-size: .76rem;
+      margin-top: .14rem;
+    }
+    .compact-summary-item.services {
+      min-height: 100%;
+    }
+    .compact-chips {
+      margin-top: 0;
+    }
     .card {
       background: rgba(255,255,255,.94);
       border: 1px solid var(--border);
@@ -246,6 +277,28 @@
       color: var(--muted);
       font-size: .76rem;
     }
+    .editor-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      margin-bottom: .9rem;
+    }
+    .editor-tab {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .editor-tab.active {
+      background: rgba(37,99,235,.10);
+      border-color: rgba(37,99,235,.24);
+      color: var(--accent);
+    }
+    .editor-pane {
+      display: none;
+    }
+    .editor-pane.active {
+      display: block;
+    }
     details.card summary {
       list-style: none;
       cursor: pointer;
@@ -329,7 +382,8 @@
       .status-grid,
       .grid-2,
       .grid-3,
-      .flow-grid {
+      .flow-grid,
+      .compact-summary-line {
         grid-template-columns: 1fr 1fr;
       }
     }
@@ -338,7 +392,8 @@
       .status-grid,
       .grid-2,
       .grid-3,
-      .flow-grid {
+      .flow-grid,
+      .compact-summary-line {
         grid-template-columns: 1fr;
       }
       .topbar { padding: 1rem; }
@@ -356,9 +411,8 @@
       </div>
       <div class="top-actions">
         <button type="button" class="btn btn-primary" id="salvarTudo">Salvar textos principais</button>
-        <a class="btn btn-primary" href="/jornadas">Disparar conversas</a>
+        <a class="btn btn-primary" href="/phone">Operar no /phone</a>
         <button type="button" class="btn btn-ghost" id="btnRecarregar">Recarregar do servidor</button>
-        <a class="btn btn-ghost" href="/visual.html" data-nav-bloco="editor_visual">Editor visual</a>
         <a class="btn btn-ghost" href="/pipeline" data-nav-bloco="painel_etapas">Painel de etapas</a>
       </div>
     </div>
@@ -369,27 +423,25 @@
       Use o bloco <strong>Comando rapido</strong> se quiser mandar uma instrucao direta para ajustar o prompt sem sair da tela. Depois revise o texto que foi inserido e salve
     </div>
 
-    <div class="status-grid" data-bloco="resumo_operacional">
-      <div class="metric">
-        <div class="label">Build</div>
-        <div class="value" id="buildValue">-</div>
-        <div class="help" id="providerValue">-</div>
+    <section class="card compact-summary" data-bloco="resumo_operacional">
+      <div class="compact-summary-line">
+        <div class="compact-summary-item">
+          <strong id="buildValue">-</strong>
+          <span id="providerValue">Build e modelo ativo</span>
+        </div>
+        <div class="compact-summary-item">
+          <strong id="promptCharsMetric">0</strong>
+          <span>Prompt principal</span>
+        </div>
+        <div class="compact-summary-item">
+          <strong id="ocrCharsMetric">0</strong>
+          <span>Prompt OCR</span>
+        </div>
+        <div class="compact-summary-item services">
+          <div class="chip-row compact-chips" id="healthChips"></div>
+        </div>
       </div>
-      <div class="metric">
-        <div class="label">Prompt principal</div>
-        <div class="value" id="promptCharsMetric">0</div>
-        <div class="help">Caracteres ativos no backend</div>
-      </div>
-      <div class="metric">
-        <div class="label">Prompt OCR</div>
-        <div class="value" id="ocrCharsMetric">0</div>
-        <div class="help">Caracteres ativos para leitura</div>
-      </div>
-      <div class="metric">
-        <div class="label">Servicos</div>
-        <div class="chip-row" id="healthChips"></div>
-      </div>
-    </div>
+    </section>
 
     <section class="card" data-bloco="comando_rapido">
       <div class="card-head">
@@ -423,8 +475,20 @@
       </div>
     </section>
 
-    <div class="grid-2">
-      <section class="card" data-bloco="prompt_principal">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Textos centrais da IA</h2>
+          <div class="hint">Prompt principal, OCR, camada humana e formatacao ficam juntos num unico bloco, com menos ruido visual.</div>
+        </div>
+      </div>
+      <div class="editor-tabs">
+        <button type="button" class="btn editor-tab active" data-editor-pane-target="panePrompt">Prompt principal</button>
+        <button type="button" class="btn editor-tab" data-editor-pane-target="paneOcr">Prompt OCR</button>
+        <button type="button" class="btn editor-tab" data-editor-pane-target="paneEstilo">Estilo e formatacao</button>
+      </div>
+
+      <div id="panePrompt" class="editor-pane active" data-bloco="prompt_principal">
         <div class="card-head">
           <div>
             <h2>Prompt principal</h2>
@@ -439,9 +503,9 @@
           <span class="spacer"></span>
           <span class="chars" id="charsPrompt">0 caracteres</span>
         </div>
-      </section>
+      </div>
 
-      <section class="card" data-bloco="prompt_ocr">
+      <div id="paneOcr" class="editor-pane" data-bloco="prompt_ocr">
         <div class="card-head">
           <div>
             <h2>Prompt OCR</h2>
@@ -456,37 +520,37 @@
           <span class="spacer"></span>
           <span class="chars" id="charsOcr">0 caracteres</span>
         </div>
-      </section>
-    </div>
+      </div>
 
-    <section class="card" data-bloco="estilo_formatacao">
-      <div class="card-head">
-        <div>
-          <h2>Estilo e formatacao</h2>
-          <div class="hint">Use estes campos para mudar tom, postura, conectivos, formato de frase e padrao do WhatsApp sem mexer no prompt inteiro</div>
+      <div id="paneEstilo" class="editor-pane" data-bloco="estilo_formatacao">
+        <div class="card-head">
+          <div>
+            <h2>Estilo e formatacao</h2>
+            <div class="hint">Use estes campos para mudar tom, postura, conectivos, formato de frase e padrao do WhatsApp sem mexer no prompt inteiro</div>
+          </div>
+          <div class="meta" id="metaOrquestracao">-</div>
         </div>
-        <div class="meta" id="metaOrquestracao">-</div>
-      </div>
-      <div class="grid-2">
-        <div class="field">
-          <label for="camadaHumana">Camada humana</label>
-          <textarea id="camadaHumana" class="compact" spellcheck="false"></textarea>
+        <div class="grid-2">
+          <div class="field">
+            <label for="camadaHumana">Camada humana</label>
+            <textarea id="camadaHumana" class="compact" spellcheck="false"></textarea>
+          </div>
+          <div class="field">
+            <label for="instrucaoFormatacao">Instrucao de formatacao</label>
+            <textarea id="instrucaoFormatacao" class="compact" spellcheck="false"></textarea>
+          </div>
         </div>
-        <div class="field">
-          <label for="instrucaoFormatacao">Instrucao de formatacao</label>
-          <textarea id="instrucaoFormatacao" class="compact" spellcheck="false"></textarea>
+        <div class="toolbar">
+          <button type="button" class="btn btn-primary" id="salvarOrquestracao">Salvar estilo e formatacao</button>
+          <button type="button" class="btn btn-ghost" id="restaurarOrquestracao">Restaurar padrao</button>
         </div>
-      </div>
-      <div class="toolbar">
-        <button type="button" class="btn btn-primary" id="salvarOrquestracao">Salvar estilo e formatacao</button>
-        <button type="button" class="btn btn-ghost" id="restaurarOrquestracao">Restaurar padrao</button>
       </div>
     </section>
 
     <details class="card" data-bloco="mensagens_fluxo">
       <summary>
         <span>Mensagens operacionais dos fluxos</span>
-        <span class="summary-note">Abra so quando quiser mexer nas respostas padrao de disponibilidade, onboarding, atualizacao e canhoto</span>
+        <span class="summary-note">Abra so quando quiser mexer nas respostas padrao de contato proativo, oferta, disponibilidade, onboarding, atualizacao e canhoto</span>
       </summary>
       <div class="field">
         <label for="mensagensFiltro">Filtrar mensagens</label>
@@ -585,12 +649,16 @@
     const jsonHeaders = { 'Content-Type': 'application/json' };
 
     const FLOW_LABELS = {
+      contato_proativo_localizacao_com_referencia: 'Contato proativo - com ultimo local ({{localizacao_atual}})',
+      contato_proativo_localizacao_sem_referencia: 'Contato proativo - sem ultimo local',
+      oferta_proativa_template: 'Oferta proativa - template ({{origem}}, {{destino}}, {{valor_ofertado}})',
       c7_pergunta_status: 'Disponibilidade - pergunta inicial',
       c7_duvida_status: 'Disponibilidade - status incerto',
       c7_pede_localizacao: 'Disponibilidade - pedir localizacao',
       c7_local_invalida: 'Disponibilidade - local invalido',
-      c7_pergunta_destino: 'Disponibilidade - pedir destino',
+      c7_pergunta_local_atual_carregado: 'Disponibilidade - carregado pedir local atual',
       c7_pergunta_data: 'Disponibilidade - pedir data',
+      c7_pergunta_local_disponibilidade: 'Disponibilidade - pedir local futuro',
       c7_data_vaga: 'Disponibilidade - data vaga',
       c7_fechamento: 'Disponibilidade - fechamento',
       c8_inicio: 'Cadastro - abertura',
@@ -705,6 +773,15 @@
       $('charsOcr').textContent = $('promptOcr').value.length.toLocaleString('pt-BR') + ' caracteres';
       $('promptCharsMetric').textContent = $('prompt').value.length.toLocaleString('pt-BR');
       $('ocrCharsMetric').textContent = $('promptOcr').value.length.toLocaleString('pt-BR');
+    }
+
+    function ativarEditorCompacto(alvo) {
+      document.querySelectorAll('[data-editor-pane-target]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.editorPaneTarget === alvo);
+      });
+      document.querySelectorAll('.editor-pane').forEach((pane) => {
+        pane.classList.toggle('active', pane.id === alvo);
+      });
     }
 
     function humanizeKey(key) {
@@ -1058,6 +1135,9 @@
     $('mensagensFiltro').addEventListener('input', renderMensagensFluxo);
     $('prompt').addEventListener('input', updateCharCounters);
     $('promptOcr').addEventListener('input', updateCharCounters);
+    document.querySelectorAll('[data-editor-pane-target]').forEach((btn) => {
+      btn.addEventListener('click', () => ativarEditorCompacto(btn.dataset.editorPaneTarget));
+    });
 
     $('restaurarPrompt').addEventListener('click', () => {
       $('prompt').value = state.padroes.prompt || '';
@@ -1105,7 +1185,6 @@
         estilo_formatacao: '[data-bloco="estilo_formatacao"]',
         mensagens_fluxo: '[data-bloco="mensagens_fluxo"]',
         operacao_avancada: '[data-bloco="operacao_avancada"]',
-        editor_visual: '[data-nav-bloco="editor_visual"]',
         painel_etapas: '[data-nav-bloco="painel_etapas"]',
       },
       onReady(contexto) {

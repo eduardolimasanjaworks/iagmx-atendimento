@@ -34,6 +34,7 @@ import {
   parseDataLiberacao,
   tentarFluxoDisponibilidade,
 } from '../servicos/fluxo-disponibilidade.js';
+import { executarTestesDisparosProativos } from './auto-teste-disparos.js';
 
 export interface ResultadoTeste {
   nome: string;
@@ -52,6 +53,7 @@ function ehMensagemRecebida(evento: string | undefined): boolean {
 
 export async function executarTestesUnidade(): Promise<ResultadoTeste[]> {
   const r: ResultadoTeste[] = [];
+  r.push(...(await executarTestesDisparosProativos()));
 
   const partes = dividirResposta('Oi parceiro, tudo bem, sou da GMX.');
   r.push(assert('dividirResposta remove pontos', !partes.some((p) => p.endsWith('.'))));
@@ -100,6 +102,7 @@ export async function executarTestesUnidade(): Promise<ResultadoTeste[]> {
     },
   ]);
   r.push(assert('extrairOfertaGmX', oferta?.valor === 4500 && oferta.origem.includes('Guarulhos')));
+  r.push(assert('extrairLocalizacaoTexto lowercase uf', extrairLocalizacaoTexto('jacarei sp') === 'jacarei SP'));
 
   const prog = await anexarFerramentasProgramaticas(
     'beleza parceiro',
@@ -151,6 +154,71 @@ export async function executarTestesUnidade(): Promise<ResultadoTeste[]> {
         disponibilidadeProativa.intencao === 'disponibilidade' &&
         disponibilidadeProativa.passo === 'pede_local',
       JSON.stringify(disponibilidadeProativa),
+    ),
+  );
+
+  const disponibilidadeStatusReal = await rotearMensagem({
+    telefone: '5511999887766',
+    mensagem: 'nao estou disponivel, estou em jacarei sp',
+    historico: [
+      {
+        role: 'assistant',
+        content:
+          'Oi, aqui e da GMX, verificacao de status, me confirma por favor como voce esta agora, se esta disponivel e onde esta',
+      },
+    ],
+  });
+  r.push(
+    assert(
+      'disponibilidade prompt real pede data para indisponivel com local',
+      disponibilidadeStatusReal.tipo === 'programatico' &&
+        disponibilidadeStatusReal.intencao === 'disponibilidade' &&
+        disponibilidadeStatusReal.passo === 'pede_data_indisponivel',
+      JSON.stringify(disponibilidadeStatusReal),
+    ),
+  );
+
+  const indisponivelPerguntaLocalDisponibilidade = await tentarFluxoDisponibilidade({
+    telefone: '5511999887766',
+    mensagem: 'vou ficar disponivel dia 26',
+    historico: [
+      { role: 'assistant', content: 'E em que data você estará liberado para carregar?' },
+      { role: 'user', content: 'nao estou disponivel, estou em jacarei sp' },
+    ],
+  });
+  r.push(
+    assert(
+      'disponibilidade indisponivel pede local futuro depois da data',
+      indisponivelPerguntaLocalDisponibilidade?.passo === 'pede_local_disponibilidade_indisponivel',
+      JSON.stringify(indisponivelPerguntaLocalDisponibilidade),
+    ),
+  );
+
+  const indisponivelConcluido = await tentarFluxoDisponibilidade({
+    telefone: '5511999887766',
+    mensagem: 'sao jose dos campos sp',
+    historico: [
+      {
+        role: 'assistant',
+        content:
+          'Oi, aqui e da GMX, verificacao de status, me confirma por favor como voce esta agora, se esta disponivel e onde esta',
+      },
+      { role: 'user', content: 'nao estou disponivel, estou em jacarei sp' },
+      { role: 'assistant', content: 'E em que data você estará liberado para carregar?' },
+      { role: 'user', content: 'vou ficar disponivel dia 26' },
+      {
+        role: 'assistant',
+        content: 'E quando liberar, em qual cidade e estado você vai estar disponível para carregar?',
+      },
+    ],
+  });
+  r.push(
+    assert(
+      'disponibilidade indisponivel conclui com status e data',
+      indisponivelConcluido?.passo === 'indisponivel_concluido' &&
+        indisponivelConcluido.textoComFerramentas.includes('"status":"indisponivel"') &&
+        indisponivelConcluido.textoComFerramentas.includes('"data_previsao_disponibilidade":"2026-06-26 08:00:00"'),
+      JSON.stringify(indisponivelConcluido),
     ),
   );
 

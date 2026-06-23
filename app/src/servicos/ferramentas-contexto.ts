@@ -59,9 +59,9 @@ export function extrairOfertaGmX(
 export function extrairLocalizacaoTexto(texto: string): string | null {
   const limpo = texto.trim();
   const padroes = [
-    /\b(?:em|de|para|pro|indo\s+pro?)\s+([A-Za-zÀ-ú''\s]{2,40}?)\s+([A-Z]{2})\b/i,
-    /\b([A-Za-zÀ-ú''\s]{2,40}?)\s*\/\s*([A-Z]{2})\b/,
-    /\b([A-Za-zÀ-ú''\s]{2,40}?)\s+([A-Z]{2})\b/,
+    /\b(?:em|de|para|pro|indo\s+pro?)\s+([A-Za-zÀ-ú''\s]{2,40}?)\s+([A-Za-z]{2})\b/i,
+    /\b([A-Za-zÀ-ú''\s]{2,40}?)\s*\/\s*([A-Za-z]{2})\b/i,
+    /\b([A-Za-zÀ-ú''\s]{2,40}?)\s+([A-Za-z]{2})\b/i,
   ];
   for (const re of padroes) {
     const m = limpo.match(re);

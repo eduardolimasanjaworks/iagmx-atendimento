@@ -82,7 +82,7 @@ async function catalogoPadrao(): Promise<JornadaTesteDefinicao[]> {
         origem: 'Guarulhos SP',
         destino: 'Curitiba PR',
         valorOfertado: 4500,
-      }),
+      }, mensagens.oferta_proativa_template),
       ativa: true,
     },
     {
