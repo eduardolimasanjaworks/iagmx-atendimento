@@ -106,7 +106,8 @@ async function main() {
 
   // 3. Debounce
   console.log('\n3. Debounce (simulação)');
-  const tel = `5511999${String(Date.now()).slice(-6)}`;
+  // Prefixo precisa bater com PREFIXOS_TESTE em /api/debounce/test
+  const tel = `551199988${String(Date.now()).slice(-4)}`;
   const deb = await post('/api/debounce/test', { telefone: tel, mensagens: ['teste log', 'segunda msg'] });
   if (ok(deb.status === 200, `POST debounce/test → ${deb.status}`)) passou++;
   else falhou++;

@@ -13,11 +13,16 @@ import {
 } from './fila-respostas.js';
 import { logEvento } from '../util/log-eventos.js';
 import { iaPodeResponder } from './pausa.js';
+import { adicionarAoHistorico } from './historico.js';
 
 let processando = false;
 
 function itemAindaValido(item: RespostaPendente): boolean {
   return Date.now() - item.criadoEm <= config.filaRespostaMaxIdadeMs;
+}
+
+function itemProntoParaEnviar(item: RespostaPendente): boolean {
+  return !item.agendadoPara || item.agendadoPara <= Date.now();
 }
 
 async function drenarUma(item: RespostaPendente): Promise<boolean> {
@@ -48,14 +53,17 @@ async function drenarUma(item: RespostaPendente): Promise<boolean> {
 
   try {
     const qtd = await enviarRespostaCanal(item.telefone, item.texto, config.evolutionInstance, {
-      fragmentar: false,
+      fragmentar: item.fragmentar ?? false,
+      ignorarAtrasoInicial: Boolean(item.agendadoPara),
     });
+    await adicionarAoHistorico(item.remoteJid, 'assistant', item.texto);
     await removerRespostaPendente(item.id, item.telefone);
     logEvento('fila', 'Resposta pendente enviada', {
       telefone: item.telefone,
       id: item.id,
       fragmentos: qtd,
       idadeSeg: Math.round((Date.now() - item.criadoEm) / 1000),
+      tipoFila: item.tipoFila,
     });
     return true;
   } catch (err) {
@@ -66,6 +74,7 @@ async function drenarUma(item: RespostaPendente): Promise<boolean> {
         telefone: item.telefone,
         id: item.id,
         erro: err instanceof Error ? err.message : String(err),
+        tipoFila: item.tipoFila,
       },
       'warn',
     );
@@ -82,7 +91,9 @@ async function cicloDrenagem(): Promise<void> {
     const status = await obterStatusConexao();
     if (!status.conectado) return;
 
-    const pendentes = (await listarRespostasPendentes(20)).filter(itemAindaValido);
+    const pendentes = (await listarRespostasPendentes(50))
+      .filter(itemAindaValido)
+      .sort((a, b) => (a.agendadoPara ?? a.criadoEm) - (b.agendadoPara ?? b.criadoEm));
     if (pendentes.length === 0) return;
 
     logEvento('fila', 'Drenando respostas pendentes recentes', {
@@ -91,6 +102,7 @@ async function cicloDrenagem(): Promise<void> {
     });
 
     for (const item of pendentes) {
+      if (!itemProntoParaEnviar(item)) continue;
       const ok = await drenarUma(item);
       if (!ok) break;
       const ainda = await obterStatusConexao();

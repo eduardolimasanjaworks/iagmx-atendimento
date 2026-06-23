@@ -5,6 +5,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import pg from 'pg';
 import { config } from '../config.js';
 import { indexarPrompt, montarPromptComRag } from './vetorizacao.js';
+import { registrarHistoricoConfiguracao } from './historico-configuracao.js';
+import { obterBlocoTreinamentoWhatsapp } from './treinamento-whatsapp.js';
 
 const pool = new pg.Pool({ connectionString: config.databaseUrl });
 
@@ -79,17 +81,29 @@ export async function obterPromptParaInferencia(
   mensagemUsuario: string,
 ): Promise<string> {
   const promptCompleto = await obterPromptBruto();
-  return montarPromptComRag(promptCompleto, mensagemUsuario);
+  const blocoTreino = await obterBlocoTreinamentoWhatsapp().catch(() => '');
+  const promptFinal = [promptCompleto, blocoTreino].filter(Boolean).join('\n\n');
+  return montarPromptComRag(promptFinal, mensagemUsuario);
 }
 
 /** Atualiza prompt e reindexa no Qdrant */
-export async function salvarPrompt(prompt: string): Promise<{ qdrantOk: boolean }> {
+export async function salvarPrompt(
+  prompt: string,
+  origem = 'api_admin',
+): Promise<{ qdrantOk: boolean }> {
+  const atual = await obterPromptBruto();
   await pool.query(
     `INSERT INTO configuracao (chave, valor, atualizado_em)
      VALUES ($1, $2, NOW())
      ON CONFLICT (chave) DO UPDATE SET valor = $2, atualizado_em = NOW()`,
     ['prompt_sistema', prompt],
   );
+  await registrarHistoricoConfiguracao({
+    chave: 'prompt_sistema',
+    antes: atual,
+    depois: prompt,
+    origem,
+  });
   let qdrantOk = true;
   try {
     await indexarPrompt(prompt);
@@ -103,11 +117,23 @@ export async function salvarPrompt(prompt: string): Promise<{ qdrantOk: boolean 
 /** Indexa prompt atual no Qdrant (chamado na inicialização) */
 export async function sincronizarVetores(): Promise<void> {
   const prompt = await obterPromptBruto();
-  if (prompt.length > config.limitePromptRag) {
-    await indexarPrompt(prompt);
-  } else {
-    console.log('[prompt] Prompt curto — indexação Qdrant opcional');
-    await indexarPrompt(prompt); // indexa mesmo assim para busca futura
+  const indexacao = indexarPrompt(prompt);
+  const timeoutMs = 45_000;
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`timeout de ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  try {
+    if (prompt.length <= config.limitePromptRag) {
+      console.log('[prompt] Prompt curto — indexação Qdrant opcional');
+    }
+    await Promise.race([indexacao, timeout]);
+  } catch (err) {
+    // Falha de indexação não pode bloquear subida da API.
+    console.error(
+      '[prompt] Falha ao sincronizar vetores (seguindo sem bloquear boot):',
+      err instanceof Error ? err.message : err,
+    );
   }
 }
 

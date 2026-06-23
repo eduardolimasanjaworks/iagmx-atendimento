@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor por telefone - IA GMX</title>
+  <link rel="stylesheet" href="/phone.css" />
+  <link rel="stylesheet" href="/phone-monitor.css" />
+  <link rel="stylesheet" href="/phone-editor.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="header">
+      <div>
+        <h1>Monitor por telefone</h1>
+        <p class="muted">Acompanhe um ou varios contatos ao mesmo tempo, com filtros rapidos e acoes operacionais separadas.</p>
+      </div>
+      <nav class="links">
+        <a href="/pipeline">Etapas</a>
+        <a href="/whatsapp">WhatsApp</a>
+        <a href="/">Config</a>
+      </nav>
+    </header>
+
+    <section class="card toolbar">
+      <input id="phoneInput" type="text" inputmode="numeric" list="phoneSuggestions" placeholder="5512997918525" />
+      <datalist id="phoneSuggestions"></datalist>
+      <button class="primary" type="button" id="addPhoneBtn">Adicionar contato</button>
+      <button type="button" id="loadBtn">Atualizar selecao</button>
+      <button type="button" id="copyBtn">Copiar link</button>
+      <div class="hint">URL direta: <span id="linkPreview">/phone=5512997918525</span></div>
+    </section>
+
+    <section class="card selection-card">
+      <div class="table-head">
+        <div>
+          <div class="table-title">Contatos selecionados</div>
+          <div class="muted">Clique em um contato sugerido ou digite e adicione. Voce pode acompanhar varios ao mesmo tempo.</div>
+        </div>
+        <button type="button" id="clearPhonesBtn">Limpar selecao</button>
+      </div>
+      <div id="selectedPhones" class="chip-list">
+        <span class="empty-inline">Nenhum contato selecionado.</span>
+      </div>
+    </section>
+
+    <section class="card overview">
+      <div class="overview-main">
+        <div class="mini-card">
+          <span>Telefone</span>
+          <strong id="sumPhone">-</strong>
+        </div>
+        <div class="mini-card">
+          <span>Estado atual</span>
+          <strong id="sumState">Aguardando consulta</strong>
+        </div>
+        <details class="mini-details details-toggle">
+          <summary>Mais detalhes</summary>
+          <div class="details-grid">
+            <div class="mini-card"><span>Linhas</span><strong id="sumTotal">0</strong></div>
+            <div class="mini-card"><span>Ultima atualizacao</span><strong id="sumUpdated">-</strong></div>
+            <div class="mini-card"><span>Disparo previsto</span><strong id="sumEta">-</strong></div>
+            <div class="mini-card"><span>Delay sorteado</span><strong id="sumDelay">-</strong></div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="panel-switch" role="tablist" aria-label="Acoes do contato">
+      <button class="panel-tab active" type="button" data-panel="journeyPanel">Jornada</button>
+      <button class="panel-tab" type="button" data-panel="resetPanel">Reset</button>
+      <button class="panel-tab" type="button" data-panel="trainingPanel">Treinamento</button>
+      <button class="panel-tab" type="button" data-panel="editorPanel">Editor</button>
+    </div>
+
+    <section id="journeyPanel" class="card admin-panel">
+      <h2>Iniciar jornada</h2>
+      <p class="muted">O primeiro disparo sai na hora. O delay fica apenas para as respostas seguintes da IA.</p>
+      <div class="grid-2">
+        <div class="field">
+          <label for="nomeMotorista">Nome do motorista</label>
+          <input id="nomeMotorista" type="text" placeholder="Opcional" />
+        </div>
+        <div class="field">
+          <label for="jornada">Jornada</label>
+          <select id="jornada"></select>
+        </div>
+      </div>
+      <div id="jornadaInfo" class="meta-strip"></div>
+      <div class="field" style="margin-top:.9rem">
+        <label for="mensagemInicial">Mensagem inicial</label>
+        <textarea id="mensagemInicial"></textarea>
+      </div>
+      <div class="checks">
+        <label><input id="resetarHistorico" type="checkbox" checked />Limpar historico operacional antes de iniciar</label>
+        <label><input id="marcarComoTeste" type="checkbox" checked />Marcar cadastro com tag padronizada em observacao</label>
+      </div>
+      <div class="actions">
+        <button id="iniciarBtn" class="primary" type="button">Iniciar jornada</button>
+        <button id="recarregarJornadasBtn" type="button">Recarregar jornadas</button>
+        <a id="abrirJourneyLink" class="ghost" href="/journey.html">Tela antiga</a>
+      </div>
+      <div id="journeyStatus" class="result-box">Aguardando carregamento das jornadas.</div>
+    </section>
+
+    <section id="resetPanel" class="card admin-panel" hidden>
+      <h2>Apagar historico do contato</h2>
+      <p class="muted">Limpa historico operacional, fila, debounce, traces e o estado visual do monitor.</p>
+      <div class="actions">
+        <button id="resetContatoBtn" type="button">Apagar historico deste contato</button>
+      </div>
+      <div id="resetContatoResultado" class="result-box">Nenhum reset executado nesta sessao.</div>
+    </section>
+
+    <section id="trainingPanel" class="card admin-panel" hidden>
+      <h2>Treinamento rapido da IA</h2>
+      <p class="muted">Crie proposta ou aplique regra nova sem sair do telefone atual.</p>
+      <div class="grid-2">
+        <div class="field">
+          <label for="trainerPhone">Telefone do professor</label>
+          <input id="trainerPhone" type="text" inputmode="numeric" placeholder="+55 12 99999-9999" />
+        </div>
+        <div class="field">
+          <label for="trainerName">Nome do professor</label>
+          <input id="trainerName" type="text" placeholder="Opcional" />
+        </div>
+      </div>
+      <div class="field" style="margin-top:.9rem">
+        <label for="trainingInstruction">Nova instrucao</label>
+        <textarea id="trainingInstruction" placeholder="Ex.: Quando o motorista disser que esta livre, confirme a localizacao antes de encerrar o atendimento."></textarea>
+      </div>
+      <div class="actions">
+        <button id="trainingProposalBtn" type="button">Criar proposta</button>
+        <button id="trainingApplyBtn" class="primary" type="button">Aplicar agora</button>
+        <a class="ghost" href="/index.html">Editor principal</a>
+      </div>
+      <details class="mini-details">
+        <summary>Ver status do modo treinador</summary>
+        <div class="details-grid" id="trainingStats">
+          <div class="mini-card"><span>Professores</span><strong id="statTrainers">-</strong></div>
+          <div class="mini-card"><span>Pendencias</span><strong id="statPending">-</strong></div>
+          <div class="mini-card"><span>Regras ativas</span><strong id="statLearned">-</strong></div>
+        </div>
+        <div id="trainingPendencias" class="result-box">Nenhuma pendencia de treinamento agora.</div>
+      </details>
+      <div id="trainingStatus" class="result-box">Carregando status do modo treinador.</div>
+    </section>
+
+    <section id="editorPanel" class="card admin-panel" hidden>
+      <h2>Editor de jornadas e OCR</h2>
+      <p class="muted">Edite o catalogo do disparo e o mapeamento OCR para o Directus no mesmo painel.</p>
+      <div class="panel-switch compact-switch" style="margin-top:.9rem">
+        <button class="panel-tab active" type="button" data-editor="editorJourneyBox">Jornadas</button>
+        <button class="panel-tab" type="button" data-editor="editorOcrBox">OCR</button>
+      </div>
+
+      <div id="editorJourneyBox">
+        <div class="grid-2">
+          <div class="field">
+            <label for="editorJornadaSelect">Jornada salva</label>
+            <select id="editorJornadaSelect"></select>
+          </div>
+          <div class="field">
+            <label for="editorJornadaId">ID interno</label>
+            <input id="editorJornadaId" type="text" placeholder="cenario_9_exemplo" />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="editorJornadaTitulo">Titulo</label>
+            <input id="editorJornadaTitulo" type="text" />
+          </div>
+          <div class="field">
+            <label for="editorJornadaCenario">Numero do cenario</label>
+            <input id="editorJornadaCenario" type="number" min="0" max="999" />
+          </div>
+        </div>
+        <div class="field" style="margin-top:.9rem">
+          <label for="editorJornadaDescricao">Descricao</label>
+          <input id="editorJornadaDescricao" type="text" />
+        </div>
+        <div class="field" style="margin-top:.9rem">
+          <label for="editorJornadaMensagem">Mensagem inicial</label>
+          <textarea id="editorJornadaMensagem"></textarea>
+        </div>
+        <div class="checks">
+          <label><input id="editorJornadaAtiva" type="checkbox" checked />Disponivel no seletor de disparo</label>
+        </div>
+        <div class="actions">
+          <button id="editorJornadaNovoBtn" type="button">Nova</button>
+          <button id="editorJornadaDuplicarBtn" type="button">Duplicar</button>
+          <button id="editorJornadaSalvarBtn" class="primary" type="button">Salvar jornada</button>
+          <button id="editorJornadaExcluirBtn" type="button">Excluir</button>
+        </div>
+        <div id="editorJornadaStatus" class="result-box">Carregando catalogo de jornadas.</div>
+      </div>
+
+      <div id="editorOcrBox" hidden>
+        <div class="grid-2">
+          <div class="field">
+            <label for="ocrDocSelect">Documento OCR</label>
+            <select id="ocrDocSelect"></select>
+          </div>
+          <div class="field">
+            <label for="ocrDocId">ID interno</label>
+            <input id="ocrDocId" type="text" placeholder="cnh" />
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="field">
+            <label for="ocrDocRotulo">Rotulo</label>
+            <input id="ocrDocRotulo" type="text" />
+          </div>
+          <div class="field">
+            <label for="ocrDocTipo">Tipo do documento</label>
+            <input id="ocrDocTipo" type="text" />
+          </div>
+          <div class="field">
+            <label for="ocrDocColecao">Colecao Directus</label>
+            <input id="ocrDocColecao" type="text" />
+          </div>
+        </div>
+        <div class="field" style="margin-top:.9rem">
+          <label for="ocrDocDica">Dica para o prompt OCR</label>
+          <input id="ocrDocDica" type="text" placeholder="Ex.: priorize placa e RENAVAM" />
+        </div>
+        <div class="checks">
+          <label><input id="ocrDocAtivo" type="checkbox" checked />Usar este documento no OCR</label>
+        </div>
+        <div class="field" style="margin-top:.9rem">
+          <label>Campos recuperados e destino no Directus</label>
+          <div id="ocrCamposList" class="stack-list"></div>
+        </div>
+        <div class="actions">
+          <button id="ocrCampoAddBtn" type="button">Adicionar campo</button>
+          <button id="ocrDocNovoBtn" type="button">Novo documento</button>
+          <button id="ocrDocDuplicarBtn" type="button">Duplicar</button>
+          <button id="ocrDocSalvarBtn" class="primary" type="button">Salvar documento</button>
+          <button id="ocrDocExcluirBtn" type="button">Excluir</button>
+        </div>
+        <div class="grid-2" style="margin-top:1rem">
+          <div class="field">
+            <label for="ocrPrompt">Prompt OCR</label>
+            <textarea id="ocrPrompt"></textarea>
+          </div>
+          <div class="field">
+            <label for="ocrPromptForcado">Prompt OCR forcado</label>
+            <textarea id="ocrPromptForcado"></textarea>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="ocrPromptSalvarBtn" class="primary" type="button">Salvar prompts OCR</button>
+        </div>
+        <div id="editorOcrStatus" class="result-box">Carregando configuracao OCR.</div>
+      </div>
+    </section>
+
+    <section class="card table-card">
+      <div class="table-head">
+        <div>
+          <div class="table-title">Eventos dos contatos</div>
+          <div class="muted">Atualizacao automatica a cada 2 segundos.</div>
+        </div>
+        <button type="button" id="refreshBtn">Atualizar agora</button>
+      </div>
+      <div class="table-filters">
+        <select id="filterPhone">
+          <option value="">Todos os contatos</option>
+        </select>
+        <select id="filterOrigin">
+          <option value="">Todas as origens</option>
+          <option value="cliente">Cliente</option>
+          <option value="ia">IA</option>
+          <option value="empresa">Empresa</option>
+          <option value="sistema">Sistema</option>
+        </select>
+        <select id="filterStatus">
+          <option value="">Todos os status</option>
+          <option value="recebido">Recebido</option>
+          <option value="enviado">Enviado</option>
+          <option value="esperando">Esperando</option>
+          <option value="fila">Fila</option>
+          <option value="erro">Erro</option>
+        </select>
+        <select id="filterType">
+          <option value="">Todos os tipos</option>
+          <option value="mensagem">Mensagem</option>
+          <option value="justificativa_ia">Justificativa IA</option>
+          <option value="debounce">Debounce</option>
+          <option value="fila">Fila</option>
+          <option value="trace">Trace</option>
+        </select>
+        <input id="filterText" type="text" placeholder="Buscar texto na mensagem" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Horario</th>
+              <th>Phone</th>
+              <th>Origem</th>
+              <th>Mensagem</th>
+              <th>Tipo</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr><td colspan="6" class="empty">Informe um ou mais telefones para abrir o monitor.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="/painel-auth.js"></script>
+  <script src="/phone.js"></script>
+  <script src="/phone-admin.js"></script>
+  <script src="/phone-editor.js"></script>
+</body>
+</html>

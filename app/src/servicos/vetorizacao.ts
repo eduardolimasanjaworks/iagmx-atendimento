@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
-import { CAMADA_HUMANA } from './camada-humana.js';
+import { montarCabecalhoOrquestracao } from './config-orquestracao-texto.js';
 import { gerarEmbedding } from './openai.js';
 import { limparColecao, inserirChunks, buscarChunks } from './qdrant.js';
 
@@ -68,7 +68,7 @@ export async function montarPromptComRag(
   promptCompleto: string,
   mensagemUsuario: string,
 ): Promise<string> {
-  const instrucao = `${CAMADA_HUMANA}\n${config.instrucaoFormatacao}`;
+  const instrucao = await montarCabecalhoOrquestracao();
 
   if (promptCompleto.length <= config.limitePromptRag) {
     return `${promptCompleto}\n\n${instrucao}`;

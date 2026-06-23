@@ -1,7 +1,7 @@
 {
   "resumo": {
-    "ok": 9,
-    "total": 9
+    "ok": 10,
+    "total": 11
   },
   "resultados": [
     {
@@ -19,7 +19,7 @@
         {
           "passo": 2,
           "user": "to vazio",
-          "resposta": "Perfeito! Como você está vazio, já está disponível para carregar, Pra gente conseguir uma carga bem pertinho, preciso que me envie sua 'Localização Atual' aqui no whatsapp, Faz assim ó:, 1️⃣ Toque no clipe 📎, 2️⃣ Selecione Localização, 3️⃣ Escolha 'Localização atual', Se não conseguir, pode escrever o nome da cidade e estado mesmo!",
+          "resposta": "Perfeito! Como você está vazio, já está disponível para carregar, Pra gente conseguir uma carga bem pertinho, preciso que me envie sua 'Localização Atual' aqui no WhatsApp, Faz assim ó: 1️⃣ Toque no clipe 📎 2️⃣ Selecione Localização 3️⃣ Escolha 'Localização atual', Se não conseguir, pode escrever o nome da cidade e estado mesmo!",
           "ferramentas": [],
           "ok": true,
           "problemas": []
@@ -27,7 +27,7 @@
         {
           "passo": 3,
           "user": "Campinas SP",
-          "resposta": "Show de bola, parceiro! Dados atualizados aqui, Boa viagem e vai com Deus!",
+          "resposta": "Beleza, dados atualizados, boa viagem e vai com Deus",
           "ferramentas": [
             "registrar_disponibilidade"
           ],
@@ -43,7 +43,7 @@
         {
           "passo": 1,
           "user": "to perto do posto na rodovia",
-          "resposta": "Desculpe, o sistema não reconhece esse ponto de referência, Preciso que escreva o nome da CIDADE e ESTADO onde você está (ou mande a localização pelo clipe)",
+          "resposta": "Desculpe, o sistema não reconhece esse ponto de referência, Preciso que escreva o nome da cidade e estado onde você está ou mande a localização pelo clipe",
           "ferramentas": [],
           "ok": true,
           "problemas": []
@@ -71,7 +71,7 @@
         {
           "passo": 1,
           "user": "quero me cadastrar",
-          "resposta": "Que ótimo que tem interesse! Para começar, manda a foto da sua CNH por favor",
+          "resposta": "Que ótimo que tem interesse! Pra começar, manda a foto da sua CNH por favor",
           "ferramentas": [],
           "ok": true,
           "problemas": []
@@ -85,7 +85,7 @@
         {
           "passo": 1,
           "user": "minha cnh é 12345678901",
-          "resposta": "Desculpe, não ficou claro, Por favor, envie a foto da sua CNH para darmos andamento no cadastro",
+          "resposta": "Desculpe, não ficou claro, Preciso que você envie uma foto da sua CNH por aqui, Pode mandar?",
           "ferramentas": [],
           "ok": true,
           "problemas": []
@@ -99,9 +99,109 @@
         {
           "passo": 1,
           "user": "[motorista enviou imagem CNH]",
-          "resposta": "Recebi seu arquivo com sucesso, Obrigado! , Agora preciso da foto do CRLV do cavalo",
+          "resposta": "Recebi seu arquivo com sucesso, obrigado! Agora preciso da foto do CRLV do cavalo, Pode enviar?",
           "ferramentas": [
             "grava_ocr"
+          ],
+          "ok": true,
+          "problemas": []
+        }
+      ]
+    },
+    {
+      "nome": "Cadastro — fluxo completo 5 docs",
+      "ok": false,
+      "turnos": [
+        {
+          "passo": 1,
+          "user": "quero me cadastrar",
+          "resposta": "Que ótimo que tem interesse! Pra começar, manda a foto da sua CNH por favor",
+          "ferramentas": [],
+          "ok": true,
+          "problemas": []
+        },
+        {
+          "passo": 2,
+          "user": "[motorista enviou imagem CNH]",
+          "resposta": "Recebi seu arquivo com sucesso, obrigado! Agora preciso da foto do CRLV do cavalo, ,",
+          "ferramentas": [
+            "grava_ocr"
+          ],
+          "ok": true,
+          "problemas": []
+        },
+        {
+          "passo": 3,
+          "user": "[motorista enviou imagem CRLV]",
+          "resposta": "Recebi o CRLV certinho, agora manda a foto ou PDF da ANTT, ,",
+          "ferramentas": [
+            "grava_ocr"
+          ],
+          "ok": true,
+          "problemas": []
+        },
+        {
+          "passo": 4,
+          "user": "[motorista enviou PDF ANTT]",
+          "resposta": "Recebi a ANTT certinho, agora preciso do comprovante de endereço, ,",
+          "ferramentas": [
+            "grava_ocr"
+          ],
+          "ok": true,
+          "problemas": []
+        },
+        {
+          "passo": 5,
+          "user": "[motorista enviou comprovante endereço]",
+          "resposta": "Recebi o comprovante de endereço, agora manda a foto do caminhão (cavalo) por favor, ,",
+          "ferramentas": [
+            "grava_ocr"
+          ],
+          "ok": true,
+          "problemas": []
+        },
+        {
+          "passo": 6,
+          "user": "[motorista enviou foto caminhão]",
+          "resposta": "Recebi a foto do caminhão certinho, seu cadastro foi enviado para análise da equipe, qualquer novidade te aviso, ,",
+          "ferramentas": [
+            "grava_ocr",
+            "atualizar_motorista"
+          ],
+          "ok": true,
+          "problemas": []
+        },
+        {
+          "passo": 7,
+          "user": "beleza",
+          "resposta": "Fechou, qualquer coisa estou por aqui, ,",
+          "ferramentas": [],
+          "ok": false,
+          "problemas": [
+            "faltou: análise | analise | validação | validacao | equipe | envi | aguard",
+            "faltou ferramenta atualizar_motorista"
+          ]
+        }
+      ]
+    },
+    {
+      "nome": "Oferta proativa — localização + interesse",
+      "ok": true,
+      "turnos": [
+        {
+          "passo": 1,
+          "user": "to em Campinas SP",
+          "resposta": "Beleza, você topa essa carga de Guarulhos para Curitiba por R$ 4.500,00?",
+          "ferramentas": [],
+          "ok": true,
+          "problemas": []
+        },
+        {
+          "passo": 2,
+          "user": "topo sim",
+          "resposta": "Show, já anotei, a equipe te chama, boa viagem",
+          "ferramentas": [
+            "resposta_oferta_carga"
           ],
           "ok": true,
           "problemas": []
@@ -115,7 +215,7 @@
         {
           "passo": 1,
           "user": "fechou pode mandar",
-          "resposta": "Show de bola, já anotei, a equipe te chama, boa viagem!",
+          "resposta": "Show, já anotei, a equipe te chama, boa viagem",
           "ferramentas": [
             "resposta_oferta_carga"
           ],
@@ -131,7 +231,7 @@
         {
           "passo": 1,
           "user": "só faço por 5000",
-          "resposta": "O valor máximo que podemos oferecer é R$ 4.500,00, Você aceita nesse valor?",
+          "resposta": "Entendi, parceiro, mas o valor máximo que podemos oferecer para essa rota é R$ 4.800,00, Se estiver de acordo, me avisa, ou posso escalar para a equipe analisar",
           "ferramentas": [],
           "ok": true,
           "problemas": []
@@ -139,7 +239,7 @@
         {
           "passo": 2,
           "user": "e se for 4350?",
-          "resposta": "Podemos fechar por R$ 4.350,00, Vou registrar esse valor, Obrigado!",
+          "resposta": "Fechado, parceiro, vou registrar o valor de R$ 4.350,00, a equipe vai entrar em contato, boa viagem",
           "ferramentas": [
             "resposta_oferta_carga"
           ],
@@ -155,7 +255,7 @@
         {
           "passo": 1,
           "user": "não rola essa não",
-          "resposta": "Combinado, fica para a próxima, boa viagem,",
+          "resposta": "Combinado, fica para a próxima, boa viagem",
           "ferramentas": [
             "resposta_oferta_carga"
           ],

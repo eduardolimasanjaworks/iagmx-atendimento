@@ -1,14 +1,15 @@
 /**
- * Chat multi-provedor: Claude (primário) → OpenAI → Groq.
+ * Chat multi-provedor com prioridade configurável e fallback seguro.
+ * OpenRouter, Claude, OpenAI e Groq podem ser usados sem mudar o restante da app.
  * Inferência e negociação passam por aqui — não pelo openai.ts direto.
  */
 import OpenAI from 'openai';
 import { config } from '../config.js';
 import { obterPromptOcr } from './config-ocr.js';
-import { validarClaude, validarGroq, validarOpenAI } from './tokens.js';
+import { validarClaude, validarGroq, validarOpenAI, validarOpenRouter } from './tokens.js';
 import type { UsoTokens } from '../util/custo-llm.js';
 
-export type ProvedorChat = 'claude' | 'openai' | 'groq';
+export type ProvedorChat = 'openrouter' | 'claude' | 'openai' | 'groq';
 
 export type MensagemChat = {
   role: 'user' | 'assistant' | 'system';
@@ -22,9 +23,29 @@ export interface ResultadoChatMeta {
   uso: UsoTokens;
 }
 
-let provedorPreferido: ProvedorChat = 'claude';
+const ORDEM_FALLBACK: ProvedorChat[] = ['openrouter', 'claude', 'openai', 'groq'];
+let provedorPreferido: ProvedorChat =
+  (ORDEM_FALLBACK.includes(config.provedorChatPreferido as ProvedorChat)
+    ? config.provedorChatPreferido
+    : 'claude') as ProvedorChat;
 let clienteOpenAI: OpenAI | null = null;
 let clienteGroq: OpenAI | null = null;
+let clienteOpenRouter: OpenAI | null = null;
+
+function ordemProvedores(): ProvedorChat[] {
+  return [...ORDEM_FALLBACK].sort((a, b) => {
+    if (a === provedorPreferido) return -1;
+    if (b === provedorPreferido) return 1;
+    return ORDEM_FALLBACK.indexOf(a) - ORDEM_FALLBACK.indexOf(b);
+  });
+}
+
+function nomeModeloProvedor(nome: ProvedorChat): string {
+  if (nome === 'openrouter') return config.modeloChatOpenRouter;
+  if (nome === 'claude') return config.modeloChatClaude;
+  if (nome === 'openai') return config.modeloChat;
+  return config.modeloChatGroq;
+}
 
 function getOpenAI(): OpenAI {
   if (!clienteOpenAI) clienteOpenAI = new OpenAI({ apiKey: config.openaiToken });
@@ -41,28 +62,37 @@ function getGroq(): OpenAI {
   return clienteGroq;
 }
 
+function getOpenRouter(): OpenAI {
+  if (!clienteOpenRouter) {
+    clienteOpenRouter = new OpenAI({
+      apiKey: config.openrouterToken,
+      baseURL: config.openrouterBaseUrl,
+      defaultHeaders: {
+        'HTTP-Referer': config.openrouterReferer,
+        'X-Title': config.openrouterAppName,
+      },
+    });
+  }
+  return clienteOpenRouter;
+}
+
 export function provedorChatAtivo(): ProvedorChat {
   return provedorPreferido;
 }
 
 /** Define provedor de chat com base nos tokens válidos */
 export async function inicializarProvedorChat(): Promise<void> {
-  const claudeOk = await validarClaude();
-  if (claudeOk) {
-    provedorPreferido = 'claude';
-    console.log(`[llm] Chat primário: Claude (${config.modeloChatClaude})`);
-    return;
-  }
-  const openaiOk = await validarOpenAI();
-  if (openaiOk) {
-    provedorPreferido = 'openai';
-    console.log(`[llm] Chat primário: OpenAI (${config.modeloChat}) — Claude indisponível`);
-    return;
-  }
-  const groqOk = await validarGroq();
-  if (groqOk) {
-    provedorPreferido = 'groq';
-    console.log('[llm] Chat primário: Groq (fallback)');
+  const disponibilidade: Record<ProvedorChat, boolean> = {
+    openrouter: await validarOpenRouter(),
+    claude: await validarClaude(),
+    openai: await validarOpenAI(),
+    groq: await validarGroq(),
+  };
+  for (const nome of ordemProvedores()) {
+    if (!disponibilidade[nome]) continue;
+    provedorPreferido = nome;
+    const modelo = nomeModeloProvedor(nome);
+    console.log(`[llm] Chat primário: ${nome} (${modelo})`);
     return;
   }
   console.warn('[llm] Nenhum provedor de chat disponível');
@@ -218,20 +248,25 @@ async function chatOpenAICompatComRetry(
   throw ultimoErro ?? new Error(`Falha após retries no ${nome}`);
 }
 
-const ORDEM_PROVEDORES: ProvedorChat[] = ['claude', 'openai', 'groq'];
-
 /**
- * Chat com fallback Claude → OpenAI → Groq, retornando uso de tokens.
+ * Chat com fallback OpenRouter → Claude → OpenAI → Groq, retornando uso de tokens.
  */
 export async function chatCompletionComMeta(
   messages: MensagemChat[],
   opts?: { temperature?: number; max_tokens?: number },
 ): Promise<ResultadoChatMeta> {
-  const ordem = [...ORDEM_PROVEDORES].sort((a) => (a === provedorPreferido ? -1 : 1));
-
   let ultimoErro: unknown;
-  for (const nome of ordem) {
+  for (const nome of ordemProvedores()) {
     try {
+      if (nome === 'openrouter' && config.openrouterHabilitado && config.openrouterToken) {
+        return await chatOpenAICompatComRetry(
+          getOpenRouter(),
+          config.modeloChatOpenRouter,
+          'openrouter',
+          messages,
+          opts,
+        );
+      }
       if (nome === 'claude' && config.anthropicToken) {
         return await chatClaudeComRetry(messages, opts);
       }
@@ -263,8 +298,20 @@ export async function chatCompletionComMeta(
   throw ultimoErro ?? new Error('Nenhum provedor de chat disponível');
 }
 
+/** Chama um modelo específico do OpenRouter sem mudar o provedor principal. */
+export async function chatOpenRouterModeloComMeta(
+  modelo: string,
+  messages: MensagemChat[],
+  opts?: { temperature?: number; max_tokens?: number },
+): Promise<ResultadoChatMeta> {
+  if (!config.openrouterHabilitado || !config.openrouterToken) {
+    throw new Error('OpenRouter não configurado');
+  }
+  return chatOpenAICompatComRetry(getOpenRouter(), modelo, 'openrouter', messages, opts);
+}
+
 /**
- * Chat com fallback Claude → OpenAI → Groq e retry em 429.
+ * Chat com fallback OpenRouter → Claude → OpenAI → Groq e retry em 429.
  */
 export async function chatCompletionRaw(
   messages: MensagemChat[],

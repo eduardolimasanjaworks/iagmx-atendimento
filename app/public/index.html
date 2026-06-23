@@ -3,480 +3,949 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin — IA Atendimento GMX</title>
+  <title>IA GMX - Painel operacional</title>
   <style>
     :root {
-      --bg: #0b1120;
-      --surface: #151f32;
-      --surface2: #1c2942;
-      --border: #2a3a55;
-      --text: #e8eef7;
-      --muted: #8fa3bf;
-      --accent: #3b82f6;
-      --accent-hover: #2563eb;
-      --ok: #34d399;
-      --warn: #fbbf24;
-      --err: #f87171;
-      --radius: 10px;
+      --bg: #f4f7fb;
+      --surface: #ffffff;
+      --surface2: #f8fbff;
+      --border: #d7e0ee;
+      --text: #132033;
+      --muted: #62748b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --ok: #059669;
+      --warn: #b45309;
+      --err: #dc2626;
       --font: "Segoe UI", system-ui, -apple-system, sans-serif;
       --mono: "Cascadia Code", "Fira Code", ui-monospace, monospace;
+      --radius: 14px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: var(--font);
-      background: var(--bg);
+      background: linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
       color: var(--text);
       min-height: 100vh;
       line-height: 1.5;
     }
-    a { color: #7dd3fc; text-decoration: none; }
+    a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-
-    .shell {
-      display: grid;
-      grid-template-columns: 240px 1fr;
-      min-height: 100vh;
-    }
-    @media (max-width: 860px) {
-      .shell { grid-template-columns: 1fr; }
-      .sidebar { position: sticky; top: 0; z-index: 10; border-right: none; border-bottom: 1px solid var(--border); }
-      .nav { display: flex; overflow-x: auto; padding-bottom: .5rem; }
-      .nav button { white-space: nowrap; flex-shrink: 0; }
-    }
-
-    .sidebar {
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      padding: 1.25rem 1rem;
+    button, input, textarea, select { font: inherit; }
+    .shell { max-width: 1220px; margin: 0 auto; padding: 1.2rem; }
+    .topbar {
       display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.1rem 1.2rem;
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      margin-bottom: 1rem;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, .07);
     }
-    .brand h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.02em; }
-    .brand p { font-size: .78rem; color: var(--muted); margin-top: .25rem; }
-    .links { display: flex; flex-direction: column; gap: .35rem; font-size: .82rem; }
-
-    .nav { display: flex; flex-direction: column; gap: .35rem; }
-    .nav button {
-      text-align: left;
-      background: transparent;
-      border: 1px solid transparent;
+    .title h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -.02em;
+    }
+    .title p {
+      margin-top: .25rem;
       color: var(--muted);
-      padding: .55rem .75rem;
-      border-radius: 8px;
-      font-size: .875rem;
-      cursor: pointer;
-      transition: .15s;
+      max-width: 72ch;
+      font-size: .92rem;
     }
-    .nav button:hover { background: var(--surface2); color: var(--text); }
-    .nav button.ativo {
-      background: rgba(59, 130, 246, .15);
-      border-color: rgba(59, 130, 246, .35);
-      color: #bfdbfe;
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      align-items: flex-start;
+      justify-content: flex-end;
+    }
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: .72rem 1rem;
+      cursor: pointer;
+      transition: .15s ease;
+      font-size: .9rem;
       font-weight: 600;
     }
-
-    .health-mini { margin-top: auto; font-size: .72rem; color: var(--muted); }
-    .chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .5rem; }
-    .chip {
-      display: inline-flex; align-items: center; gap: .3rem;
-      padding: .15rem .45rem; border-radius: 999px;
-      background: var(--surface2); font-size: .68rem;
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
     }
-    .chip .dot { width: 6px; height: 6px; border-radius: 50%; }
-    .chip .dot.on { background: var(--ok); }
-    .chip .dot.off { background: var(--err); }
-
-    .main { padding: 1.5rem 1.75rem 2.5rem; max-width: 920px; }
-
-    .topbar {
-      display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;
-      justify-content: space-between;
-      margin-bottom: 1.25rem;
-      padding-bottom: 1.25rem;
-      border-bottom: 1px solid var(--border);
-    }
-    .topbar h2 { font-size: 1.35rem; font-weight: 700; }
-    .topbar .hint { font-size: .85rem; color: var(--muted); margin-top: .2rem; }
-    .topbar-actions { display: flex; gap: .5rem; align-items: center; }
-
-    .toast {
-      position: fixed; top: 1rem; right: 1rem; z-index: 100;
-      max-width: 360px; padding: .75rem 1rem;
-      border-radius: var(--radius);
-      font-size: .875rem;
-      box-shadow: 0 8px 30px rgba(0,0,0,.45);
-      opacity: 0; transform: translateY(-8px);
-      transition: .25s; pointer-events: none;
-    }
-    .toast.visivel { opacity: 1; transform: translateY(0); }
-    .toast.ok { background: #064e3b; border: 1px solid #059669; color: #a7f3d0; }
-    .toast.erro { background: #450a0a; border: 1px solid #b91c1c; color: #fecaca; }
-    .toast.info { background: #1e3a5f; border: 1px solid #2563eb; color: #bfdbfe; }
-
-    .panel { display: none; animation: fade .2s ease; }
-    .panel.ativo { display: block; }
-    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
-    .card {
-      background: var(--surface);
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem;
+    }
+    .btn-ghost:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .btn-warn {
+      background: var(--warn);
+      color: #fff;
+    }
+    .btn-warn:hover { background: #92400e; }
+    .notice {
+      margin-bottom: 1rem;
+      padding: .85rem 1rem;
+      border-radius: 14px;
+      border: 1px solid rgba(37,99,235,.16);
+      background: rgba(37,99,235,.06);
+      color: #1e3a8a;
+      font-size: .9rem;
+    }
+    .status-grid,
+    .grid-2,
+    .grid-3 {
+      display: grid;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .status-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem 1.05rem;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, .07);
       margin-bottom: 1rem;
     }
     .card-head {
-      display: flex; flex-wrap: wrap; gap: .75rem;
-      justify-content: space-between; align-items: flex-start;
-      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      gap: .8rem;
+      align-items: flex-start;
+      margin-bottom: .85rem;
+      flex-wrap: wrap;
     }
-    .card-head h3 { font-size: 1rem; font-weight: 600; }
-    .card-head p { font-size: .82rem; color: var(--muted); margin-top: .25rem; max-width: 52ch; }
-    .meta { font-size: .75rem; color: var(--muted); white-space: nowrap; }
-
-    textarea, input[type="number"] {
-      width: 100%;
-      background: var(--bg);
+    .card-head h2,
+    .card-head h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -.01em;
+    }
+    .hint {
+      margin-top: .22rem;
+      color: var(--muted);
+      font-size: .84rem;
+      max-width: 72ch;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: .76rem;
+      white-space: nowrap;
+    }
+    .metric {
+      background: rgba(255,255,255,.92);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 16px;
+      padding: .95rem 1rem;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+    }
+    .metric .label {
+      color: var(--muted);
+      font-size: .74rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .metric .value {
+      margin-top: .35rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+    .metric .help {
+      margin-top: .22rem;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      margin-top: .45rem;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .28rem .55rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
       color: var(--text);
-      padding: .85rem 1rem;
-      font-size: .875rem;
-      line-height: 1.55;
+      font-size: .74rem;
+    }
+    .chip .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+    .chip .dot.on { background: var(--ok); }
+    .chip .dot.off { background: var(--err); }
+    .field + .field { margin-top: .85rem; }
+    .field label {
+      display: block;
+      margin-bottom: .38rem;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .field small {
+      display: block;
+      margin-top: .3rem;
+      color: var(--muted);
+      font-size: .74rem;
+    }
+    input[type="number"],
+    input[type="text"],
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: .82rem .95rem;
+      background: #f8fbff;
+      color: var(--text);
     }
     textarea {
-      min-height: 320px;
+      min-height: 220px;
       resize: vertical;
       font-family: var(--mono);
-      font-size: .8125rem;
+      font-size: .82rem;
+      line-height: 1.55;
     }
-    textarea.medio { min-height: 160px; }
-    textarea:focus, input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
-
+    textarea.compact { min-height: 130px; }
+    textarea.quick { min-height: 120px; font-family: var(--font); font-size: .92rem; }
+    textarea:focus,
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
     .toolbar {
-      display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
-      margin-top: .85rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      align-items: center;
+      margin-top: .8rem;
     }
     .toolbar .spacer { flex: 1; }
-    .chars { font-size: .75rem; color: var(--muted); }
-
-    button.btn {
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      padding: .6rem 1.1rem;
-      border-radius: 8px;
-      font-size: .875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .15s;
-    }
-    button.btn:hover { background: var(--accent-hover); }
-    button.btn:disabled { opacity: .45; cursor: not-allowed; }
-    button.btn-ghost {
-      background: transparent;
-      border: 1px solid var(--border);
+    .chars,
+    .inline-note {
       color: var(--muted);
+      font-size: .76rem;
     }
-    button.btn-ghost:hover { background: var(--surface2); color: var(--text); }
-    button.btn-warn { background: #92400e; }
-    button.btn-warn:hover { background: #b45309; }
-
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
-    .field label { display: block; font-size: .78rem; font-weight: 600; color: #cbd5e1; margin-bottom: .4rem; }
-    .field small { display: block; font-size: .72rem; color: var(--muted); margin-top: .3rem; }
-
+    details.card summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      gap: .8rem;
+      align-items: center;
+      font-weight: 700;
+    }
+    details.card summary::-webkit-details-marker { display: none; }
+    details.card[open] summary { margin-bottom: .9rem; }
+    .summary-note {
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 400;
+    }
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .8rem;
+    }
+    .flow-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface2);
+      padding: .8rem;
+    }
+    .flow-item strong {
+      display: block;
+      font-size: .88rem;
+      margin-bottom: .3rem;
+    }
+    .flow-item small {
+      display: block;
+      margin-bottom: .5rem;
+      color: var(--muted);
+      font-size: .74rem;
+    }
     .toggle {
-      display: flex; align-items: center; gap: .6rem;
-      margin-top: 1rem; font-size: .875rem; color: #cbd5e1;
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+      margin-top: .85rem;
+      color: var(--text);
+      font-size: .88rem;
     }
     .toggle input { width: 1rem; height: 1rem; accent-color: var(--accent); }
-
-    .loading-overlay {
-      position: fixed; inset: 0; background: rgba(11,17,32,.7);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 50; font-size: .95rem; color: var(--muted);
+    .toast {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 100;
+      max-width: 360px;
+      padding: .8rem 1rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.18);
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: .2s ease;
+      pointer-events: none;
+      font-size: .88rem;
     }
-    .loading-overlay.oculto { display: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.ok { background: #ecfdf5; color: #065f46; border: 1px solid #10b981; }
+    .toast.err { background: #fef2f2; color: #991b1b; border: 1px solid #dc2626; }
+    .toast.info { background: #eff6ff; color: #1e3a8a; border: 1px solid #2563eb; }
+    .loading {
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      color: var(--muted);
+      font-size: .95rem;
+      backdrop-filter: blur(4px);
+    }
+    .loading.hidden { display: none; }
+    @media (max-width: 960px) {
+      .status-grid,
+      .grid-2,
+      .grid-3,
+      .flow-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    @media (max-width: 760px) {
+      .shell { padding: .8rem; }
+      .status-grid,
+      .grid-2,
+      .grid-3,
+      .flow-grid {
+        grid-template-columns: 1fr;
+      }
+      .topbar { padding: 1rem; }
+    }
   </style>
 </head>
 <body>
-  <div id="loading" class="loading-overlay">Carregando configurações…</div>
+  <div id="loading" class="loading">Carregando configuracoes...</div>
   <div id="toast" class="toast"></div>
-
   <div class="shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <h1>IA GMX</h1>
-        <p>Painel de configuração</p>
+    <div class="topbar">
+      <div class="title">
+        <h1>Painel direto da i.a GMX</h1>
+        <p>Aqui voce ajusta o comportamento da i.a com foco operacional. O essencial fica visivel primeiro e o restante aparece apenas quando fizer sentido</p>
       </div>
-      <nav class="nav" id="nav">
-        <button type="button" data-panel="prompt" class="ativo">Prompt do sistema</button>
-        <button type="button" data-panel="ocr">Prompt OCR</button>
-        <button type="button" data-panel="envio">Humanização</button>
-        <button type="button" data-panel="tempo">Reatividade</button>
-        <button type="button" data-panel="deploy">Deploy</button>
-      </nav>
-      <div class="links">
-        <a href="/pipeline">Pipeline ao vivo →</a>
-        <a href="/whatsapp">WhatsApp →</a>
+      <div class="top-actions">
+        <button type="button" class="btn btn-primary" id="salvarTudo">Salvar textos principais</button>
+        <a class="btn btn-primary" href="/jornadas">Disparar conversas</a>
+        <button type="button" class="btn btn-ghost" id="btnRecarregar">Recarregar do servidor</button>
+        <a class="btn btn-ghost" href="/visual.html" data-nav-bloco="editor_visual">Editor visual</a>
+        <a class="btn btn-ghost" href="/pipeline" data-nav-bloco="painel_etapas">Painel de etapas</a>
       </div>
-      <div class="health-mini">
-        <span>Serviços</span>
-        <div class="chips" id="healthChips">…</div>
-        <div id="buildInfo" style="margin-top:.5rem"></div>
-      </div>
-    </aside>
+    </div>
 
-    <main class="main">
-      <div class="topbar">
+    <div id="adminEquipeAccess"></div>
+
+    <div class="notice" data-bloco="comando_rapido">
+      Use o bloco <strong>Comando rapido</strong> se quiser mandar uma instrucao direta para ajustar o prompt sem sair da tela. Depois revise o texto que foi inserido e salve
+    </div>
+
+    <div class="status-grid" data-bloco="resumo_operacional">
+      <div class="metric">
+        <div class="label">Build</div>
+        <div class="value" id="buildValue">-</div>
+        <div class="help" id="providerValue">-</div>
+      </div>
+      <div class="metric">
+        <div class="label">Prompt principal</div>
+        <div class="value" id="promptCharsMetric">0</div>
+        <div class="help">Caracteres ativos no backend</div>
+      </div>
+      <div class="metric">
+        <div class="label">Prompt OCR</div>
+        <div class="value" id="ocrCharsMetric">0</div>
+        <div class="help">Caracteres ativos para leitura</div>
+      </div>
+      <div class="metric">
+        <div class="label">Servicos</div>
+        <div class="chip-row" id="healthChips"></div>
+      </div>
+    </div>
+
+    <section class="card" data-bloco="comando_rapido">
+      <div class="card-head">
         <div>
-          <h2 id="panelTitle">Prompt do sistema</h2>
-          <p class="hint" id="panelHint">Cenários, tom de voz e ferramentas da IA</p>
-        </div>
-        <div class="topbar-actions">
-          <button type="button" class="btn btn-ghost" id="btnRecarregar">Recarregar do servidor</button>
+          <h2>Comando rapido para alterar prompt</h2>
+          <div class="hint">Escreva uma orientacao em linguagem normal, escolha onde quer aplicar e clique para inserir ou salvar direto</div>
         </div>
       </div>
-
-      <!-- Prompt sistema -->
-      <section class="panel ativo" id="panel-prompt">
-        <div class="card">
-          <div class="card-head">
-            <div>
-              <h3>Prompt completo</h3>
-              <p>Texto que guia todos os cenários. Carregado do banco — edite e salve.</p>
-            </div>
-            <span class="meta" id="metaPrompt">—</span>
+      <div class="grid-2">
+        <div class="field">
+          <label for="quickPrompt">Instrucao direta</label>
+          <textarea id="quickPrompt" class="quick" placeholder="Exemplo: quando for falar de disponibilidade, seja mais objetivo e sempre deixe claro que a GMX iniciou o contato"></textarea>
+          <small>Esse campo nao envia nada sozinho. Ele injeta texto no editor escolhido abaixo</small>
+        </div>
+        <div>
+          <div class="field">
+            <label for="quickTarget">Destino da instrucao</label>
+            <select id="quickTarget">
+              <option value="prompt">Prompt principal</option>
+              <option value="camadaHumana">Camada humana</option>
+              <option value="promptOcr">Prompt OCR</option>
+            </select>
+            <small>Prompt principal muda o comportamento geral, camada humana muda estilo e postura, OCR muda leitura de documento</small>
           </div>
-          <textarea id="prompt" spellcheck="false"></textarea>
           <div class="toolbar">
-            <button type="button" class="btn" id="salvarPrompt">Salvar prompt</button>
-            <button type="button" class="btn btn-ghost" id="restaurarPrompt">Restaurar padrão do servidor</button>
-            <span class="spacer"></span>
-            <span class="chars" id="charsPrompt">0 caracteres</span>
+            <button type="button" class="btn btn-primary" id="insertQuickPrompt">Inserir no editor</button>
+            <button type="button" class="btn btn-ghost" id="saveQuickPrompt">Inserir e salvar agora</button>
           </div>
+          <p class="inline-note" style="margin-top:.75rem">A instrucao e adicionada como bloco textual, para voce ainda conseguir revisar o que entrou antes de continuar</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <section class="card" data-bloco="prompt_principal">
+        <div class="card-head">
+          <div>
+            <h2>Prompt principal</h2>
+            <div class="hint">Aqui fica a regra central da IA, incluindo contexto de operacao, ferramentas e comportamento geral</div>
+          </div>
+          <div class="meta" id="metaPrompt">-</div>
+        </div>
+        <textarea id="prompt" spellcheck="false"></textarea>
+        <div class="toolbar">
+          <button type="button" class="btn btn-primary" id="salvarPrompt">Salvar prompt principal</button>
+          <button type="button" class="btn btn-ghost" id="restaurarPrompt">Voltar ao texto carregado</button>
+          <span class="spacer"></span>
+          <span class="chars" id="charsPrompt">0 caracteres</span>
         </div>
       </section>
 
-      <!-- OCR -->
-      <section class="panel" id="panel-ocr">
-        <div class="card">
-          <div class="card-head">
-            <div>
-              <h3>Leitura de documentos</h3>
-              <p>Instrução enviada ao modelo ao processar CNH, CRLV, ANTT e comprovantes.</p>
-            </div>
-            <span class="meta" id="metaOcr">—</span>
+      <section class="card" data-bloco="prompt_ocr">
+        <div class="card-head">
+          <div>
+            <h2>Prompt OCR</h2>
+            <div class="hint">Controla como a IA interpreta documentos, comprovantes, canhotos e imagens enviadas pelo WhatsApp</div>
           </div>
-          <textarea id="promptOcr" class="medio" spellcheck="false"></textarea>
-          <div class="toolbar">
-            <button type="button" class="btn" id="salvarOcr">Salvar prompt OCR</button>
-            <button type="button" class="btn btn-ghost" id="restaurarOcr">Restaurar padrão</button>
-            <span class="spacer"></span>
-            <span class="chars" id="charsOcr">0 caracteres</span>
-          </div>
+          <div class="meta" id="metaOcr">-</div>
+        </div>
+        <textarea id="promptOcr" class="compact" spellcheck="false"></textarea>
+        <div class="toolbar">
+          <button type="button" class="btn btn-primary" id="salvarOcr">Salvar prompt OCR</button>
+          <button type="button" class="btn btn-ghost" id="restaurarOcr">Restaurar padrao</button>
+          <span class="spacer"></span>
+          <span class="chars" id="charsOcr">0 caracteres</span>
         </div>
       </section>
+    </div>
 
-      <!-- Envio -->
-      <section class="panel" id="panel-envio">
-        <div class="card">
+    <section class="card" data-bloco="estilo_formatacao">
+      <div class="card-head">
+        <div>
+          <h2>Estilo e formatacao</h2>
+          <div class="hint">Use estes campos para mudar tom, postura, conectivos, formato de frase e padrao do WhatsApp sem mexer no prompt inteiro</div>
+        </div>
+        <div class="meta" id="metaOrquestracao">-</div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="camadaHumana">Camada humana</label>
+          <textarea id="camadaHumana" class="compact" spellcheck="false"></textarea>
+        </div>
+        <div class="field">
+          <label for="instrucaoFormatacao">Instrucao de formatacao</label>
+          <textarea id="instrucaoFormatacao" class="compact" spellcheck="false"></textarea>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button type="button" class="btn btn-primary" id="salvarOrquestracao">Salvar estilo e formatacao</button>
+        <button type="button" class="btn btn-ghost" id="restaurarOrquestracao">Restaurar padrao</button>
+      </div>
+    </section>
+
+    <details class="card" data-bloco="mensagens_fluxo">
+      <summary>
+        <span>Mensagens operacionais dos fluxos</span>
+        <span class="summary-note">Abra so quando quiser mexer nas respostas padrao de disponibilidade, onboarding, atualizacao e canhoto</span>
+      </summary>
+      <div class="field">
+        <label for="mensagensFiltro">Filtrar mensagens</label>
+        <input id="mensagensFiltro" type="text" placeholder="Exemplo: canhoto, c7, endereco, atualizacao" />
+      </div>
+      <div id="mensagensFluxoEditor" class="flow-grid" style="margin-top:.9rem"></div>
+      <div class="toolbar">
+        <button type="button" class="btn btn-primary" id="salvarMensagensFluxo">Salvar mensagens de fluxo</button>
+        <button type="button" class="btn btn-ghost" id="restaurarMensagensFluxo">Restaurar padrao</button>
+        <span class="spacer"></span>
+        <span class="chars" id="metaMensagensFluxo">-</span>
+      </div>
+    </details>
+
+    <details class="card" data-bloco="operacao_avancada">
+      <summary>
+        <span>Operacao avancada</span>
+        <span class="summary-note">Humanizacao de envio, debounce e reload do processo</span>
+      </summary>
+      <div class="grid-3" style="margin-top:.9rem">
+        <div class="card" style="margin-bottom:0; box-shadow:none">
           <div class="card-head">
             <div>
-              <h3>Humanização do envio</h3>
-              <p>Pausas entre bolhas e simulação de "digitando…" via Evolution API.</p>
+              <h3>Humanizacao</h3>
+              <div class="hint">Pausas entre bolhas e digitando no WhatsApp</div>
             </div>
           </div>
-          <div class="grid">
-            <div class="field">
-              <label for="delayMin">Delay mínimo entre mensagens (ms)</label>
-              <input type="number" id="delayMin" min="0" step="100" />
-              <small>Tempo mínimo entre cada bolha picotada</small>
-            </div>
-            <div class="field">
-              <label for="delayMax">Delay máximo entre mensagens (ms)</label>
-              <input type="number" id="delayMax" min="0" step="100" />
-            </div>
-            <div class="field">
-              <label for="digMin">Digitando — duração mínima (ms)</label>
-              <input type="number" id="digMin" min="0" step="100" />
-            </div>
-            <div class="field">
-              <label for="digMax">Digitando — duração máxima (ms)</label>
-              <input type="number" id="digMax" min="0" step="100" />
-            </div>
+          <div class="field">
+            <label for="delayMin">Delay minimo entre mensagens (ms)</label>
+            <input type="number" id="delayMin" min="0" step="100" />
+          </div>
+          <div class="field">
+            <label for="delayMax">Delay maximo entre mensagens (ms)</label>
+            <input type="number" id="delayMax" min="0" step="100" />
+          </div>
+          <div class="field">
+            <label for="digMin">Digitando minimo (ms)</label>
+            <input type="number" id="digMin" min="0" step="100" />
+          </div>
+          <div class="field">
+            <label for="digMax">Digitando maximo (ms)</label>
+            <input type="number" id="digMax" min="0" step="100" />
           </div>
           <label class="toggle">
             <input type="checkbox" id="digAtivo" checked />
-            Mostrar "digitando…" antes de cada mensagem
+            Mostrar digitando antes da mensagem
           </label>
           <div class="toolbar">
-            <button type="button" class="btn" id="salvarEnvio">Salvar humanização</button>
-            <button type="button" class="btn btn-ghost" id="restaurarEnvio">Restaurar padrão</button>
+            <button type="button" class="btn btn-primary" id="salvarEnvio">Salvar humanizacao</button>
+            <button type="button" class="btn btn-ghost" id="restaurarEnvio">Restaurar</button>
           </div>
         </div>
-      </section>
 
-      <!-- Tempo -->
-      <section class="panel" id="panel-tempo">
-        <div class="card">
+        <div class="card" style="margin-bottom:0; box-shadow:none">
           <div class="card-head">
             <div>
-              <h3>Reatividade (debounce)</h3>
-              <p>Quanto espera o motorista parar de digitar antes de responder. Efeito imediato.</p>
+              <h3>Reatividade</h3>
+              <div class="hint">Tempo para consolidar mensagem antes de responder</div>
             </div>
           </div>
-          <div class="grid">
-            <div class="field">
-              <label for="debounceMs">Debounce (ms)</label>
-              <input type="number" id="debounceMs" min="300" max="5000" step="100" />
-              <small>Padrão recomendado: 800 ms</small>
-            </div>
-            <div class="field">
-              <label for="debounceWorker">Worker poll (ms)</label>
-              <input type="number" id="debounceWorker" min="100" max="2000" step="50" />
-            </div>
+          <div class="field">
+            <label for="debounceMs">Debounce (ms)</label>
+            <input type="number" id="debounceMs" min="300" max="5000" step="100" />
+          </div>
+          <div class="field">
+            <label for="debounceWorker">Worker poll (ms)</label>
+            <input type="number" id="debounceWorker" min="100" max="2000" step="50" />
           </div>
           <div class="toolbar">
-            <button type="button" class="btn" id="salvarTempo">Salvar tempos</button>
-            <button type="button" class="btn btn-ghost" id="restaurarTempo">Restaurar padrão</button>
+            <button type="button" class="btn btn-primary" id="salvarTempo">Salvar tempos</button>
+            <button type="button" class="btn btn-ghost" id="restaurarTempo">Restaurar</button>
           </div>
         </div>
-      </section>
 
-      <!-- Deploy -->
-      <section class="panel" id="panel-deploy">
-        <div class="card">
+        <div class="card" style="margin-bottom:0; box-shadow:none">
           <div class="card-head">
             <div>
-              <h3>Recarregar processo</h3>
-              <p>Após deploy de código no servidor, reinicia o Node dentro do container (sem derrubar o Docker).</p>
+              <h3>Deploy</h3>
+              <div class="hint">Recarrega o processo Node depois de uma mudanca de codigo</div>
             </div>
-            <span class="meta" id="metaBuild">build —</span>
+            <div class="meta" id="metaBuild">-</div>
           </div>
           <div class="toolbar">
             <button type="button" class="btn btn-warn" id="reloadApp">Recarregar processo agora</button>
           </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </details>
   </div>
 
+  <script src="/painel-auth.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const toastEl = $('toast');
     const loadingEl = $('loading');
-
     const jsonHeaders = { 'Content-Type': 'application/json' };
 
-    const panels = {
-      prompt: { title: 'Prompt do sistema', hint: 'Cenários, tom de voz e ferramentas da IA' },
-      ocr: { title: 'Prompt OCR', hint: 'Instrução de leitura de documentos' },
-      envio: { title: 'Humanização', hint: 'Delays e digitando no WhatsApp' },
-      tempo: { title: 'Reatividade', hint: 'Debounce e worker' },
-      deploy: { title: 'Deploy', hint: 'Reload do processo Node' },
+    const FLOW_LABELS = {
+      c7_pergunta_status: 'Disponibilidade - pergunta inicial',
+      c7_duvida_status: 'Disponibilidade - status incerto',
+      c7_pede_localizacao: 'Disponibilidade - pedir localizacao',
+      c7_local_invalida: 'Disponibilidade - local invalido',
+      c7_pergunta_destino: 'Disponibilidade - pedir destino',
+      c7_pergunta_data: 'Disponibilidade - pedir data',
+      c7_data_vaga: 'Disponibilidade - data vaga',
+      c7_fechamento: 'Disponibilidade - fechamento',
+      c8_inicio: 'Cadastro - abertura',
+      c8_fechamento: 'Cadastro - fechamento',
+      c8_reprompt_cnh: 'Cadastro - reprompt CNH',
+      c8_reprompt_crlv: 'Cadastro - reprompt CRLV',
+      c8_reprompt_antt: 'Cadastro - reprompt ANTT',
+      c8_reprompt_endereco: 'Cadastro - reprompt endereco',
+      c8_reprompt_caminhao: 'Cadastro - reprompt caminhao',
+      c8_confirmacao_cnh: 'Cadastro - confirmacao CNH',
+      c8_confirmacao_crlv: 'Cadastro - confirmacao CRLV',
+      c8_confirmacao_antt: 'Cadastro - confirmacao ANTT',
+      c8_confirmacao_endereco: 'Cadastro - confirmacao endereco',
+      c8_ocr_ilegivel: 'Cadastro - OCR ilegivel',
+      c8_ocr_escalonar: 'Cadastro - escalar para humano',
+      atualizacao_pedir_foto: 'Atualizacao - pedir foto',
+      atualizacao_reprompt_cnh: 'Atualizacao - reprompt CNH',
+      atualizacao_reprompt_crlv: 'Atualizacao - reprompt CRLV',
+      atualizacao_reprompt_antt: 'Atualizacao - reprompt ANTT',
+      atualizacao_reprompt_endereco: 'Atualizacao - reprompt endereco',
+      atualizacao_reprompt_caminhao: 'Atualizacao - reprompt caminhao',
+      atualizacao_ocr_recusa: 'Atualizacao - falha tecnica',
+      atualizacao_foto_ilegivel: 'Atualizacao - foto ilegivel',
+      atualizacao_tipo_incerto: 'Atualizacao - tipo incerto',
+      atualizacao_tipo_incerto_com_texto: 'Atualizacao - tipo incerto com texto',
+      atualizacao_confirmacao_negada: 'Atualizacao - confirmacao negada',
+      canhoto_sem_embarque: 'Canhoto - sem embarque',
+      canhoto_pedir_foto: 'Canhoto - pedir foto',
+      canhoto_midia_sem_embarque: 'Canhoto - imagem sem embarque',
+      canhoto_ok: 'Canhoto - confirmado',
+      ocr_humano_aberturas: 'OCR humano - aberturas',
+      ocr_humano_documento_salvo_com_detalhes: 'OCR humano - salvo com detalhes',
+      ocr_humano_documento_salvo_sem_detalhes: 'OCR humano - salvo sem detalhes',
+      ocr_humano_confirmacao_com_detalhes: 'OCR humano - confirmar com detalhes',
+      ocr_humano_confirmacao_sem_detalhes: 'OCR humano - confirmar sem detalhes',
+      ocr_humano_confirmada_com_detalhes: 'OCR humano - confirmada com detalhes',
+      ocr_humano_confirmada_sem_detalhes: 'OCR humano - confirmada sem detalhes',
     };
 
-    let padroes = { promptLoaded: '', ocrPadrao: '', envio: null, tempo: null };
+    const state = {
+      padroes: {
+        prompt: '',
+        ocr: '',
+        orquestracao: null,
+        mensagensFluxo: null,
+        envio: null,
+        tempo: null,
+      },
+      meta: {
+        promptAtualizadoEm: null,
+        ocrAtualizadoEm: null,
+        orquestracaoAtualizadoEm: null,
+        mensagensAtualizadoEm: null,
+      },
+      mensagensFluxo: {},
+      health: null,
+      contexto: null,
+    };
+
+    const ADMIN_ONLY_IDS = [
+      'salvarTudo',
+      'salvarPrompt',
+      'salvarOcr',
+      'salvarOrquestracao',
+      'salvarMensagensFluxo',
+      'salvarEnvio',
+      'salvarTempo',
+      'reloadApp',
+      'insertQuickPrompt',
+      'saveQuickPrompt',
+      'restaurarPrompt',
+      'restaurarOcr',
+      'restaurarOrquestracao',
+      'restaurarMensagensFluxo',
+      'restaurarEnvio',
+      'restaurarTempo',
+    ];
 
     function toast(msg, tipo = 'info') {
       toastEl.textContent = msg;
-      toastEl.className = 'toast visivel ' + tipo;
+      toastEl.className = 'toast show ' + (tipo === 'erro' ? 'err' : tipo);
       clearTimeout(toastEl._t);
       toastEl._t = setTimeout(() => { toastEl.className = 'toast'; }, 4200);
     }
 
     function fmtData(iso) {
-      if (!iso) return 'sem registro de alteração';
+      if (!iso) return 'sem registro recente';
       try {
         return 'Atualizado ' + new Date(iso).toLocaleString('pt-BR');
-      } catch { return ''; }
-    }
-
-    function atualizarChars(el, counterId) {
-      $(counterId).textContent = (el.value.length).toLocaleString('pt-BR') + ' caracteres';
-    }
-
-    async function carregarTudo() {
-      loadingEl.classList.remove('oculto');
-      try {
-        const [rPrompt, rOcr, rEnvio, rTempo] = await Promise.all([
-          fetch('/api/prompt').then(r => r.json()),
-          fetch('/api/config/ocr').then(r => r.json()),
-          fetch('/api/config/envio').then(r => r.json()),
-          fetch('/api/config/tempo').then(r => r.json()),
-        ]);
-
-        $('prompt').value = rPrompt.prompt || '';
-        padroes.promptLoaded = rPrompt.prompt || '';
-        $('metaPrompt').textContent = fmtData(rPrompt.atualizadoEm) + ' · ' + (rPrompt.caracteres || 0).toLocaleString('pt-BR') + ' chars';
-
-        $('promptOcr').value = rOcr.prompt || '';
-        padroes.ocrPadrao = rOcr.padrao || '';
-        $('metaOcr').textContent = fmtData(rOcr.atualizadoEm);
-
-        const c = rEnvio.config || {};
-        padroes.envio = rEnvio.padrao || c;
-        $('delayMin').value = c.delayMinMs ?? 200;
-        $('delayMax').value = c.delayMaxMs ?? 600;
-        $('digMin').value = c.digitandoMinMs ?? 300;
-        $('digMax').value = c.digitandoMaxMs ?? 800;
-        $('digAtivo').checked = c.digitandoAtivo !== false;
-
-        padroes.tempo = rTempo.padrao || rTempo.config;
-        $('debounceMs').value = rTempo.config?.debounceMs ?? 800;
-        $('debounceWorker').value = rTempo.config?.debounceWorkerMs ?? 300;
-        $('metaBuild').textContent = 'build ' + (rTempo.build || '?');
-        $('buildInfo').textContent = 'Build ' + (rTempo.build || '?');
-
-        atualizarChars($('prompt'), 'charsPrompt');
-        atualizarChars($('promptOcr'), 'charsOcr');
-        toast('Configurações carregadas', 'ok');
-      } catch (e) {
-        toast(e.message || 'Erro ao carregar', 'erro');
-      } finally {
-        loadingEl.classList.add('oculto');
+      } catch {
+        return 'sem registro recente';
       }
     }
 
-    async function salvarPrompt() {
-      $('salvarPrompt').disabled = true;
+    function podeVerBloco(bloco) {
+      return state.contexto?.usuario?.perfil === 'admin'
+        || Boolean(state.contexto?.equipe?.blocosVisiveis?.includes(bloco));
+    }
+
+    function aplicarModoSomenteLeitura() {
+      if (state.contexto?.usuario?.perfil === 'admin') return;
+      ADMIN_ONLY_IDS.forEach((id) => {
+        const el = $(id);
+        if (!el) return;
+        el.disabled = true;
+        el.title = 'Disponivel apenas para admin';
+      });
+    }
+
+    function updateCharCounters() {
+      $('charsPrompt').textContent = $('prompt').value.length.toLocaleString('pt-BR') + ' caracteres';
+      $('charsOcr').textContent = $('promptOcr').value.length.toLocaleString('pt-BR') + ' caracteres';
+      $('promptCharsMetric').textContent = $('prompt').value.length.toLocaleString('pt-BR');
+      $('ocrCharsMetric').textContent = $('promptOcr').value.length.toLocaleString('pt-BR');
+    }
+
+    function humanizeKey(key) {
+      return FLOW_LABELS[key] || key.replaceAll('_', ' ');
+    }
+
+    function renderMensagensFluxo() {
+      const filtro = ($('mensagensFiltro').value || '').trim().toLowerCase();
+      const entries = Object.entries(state.mensagensFluxo || {}).filter(([key, value]) => {
+        if (!filtro) return true;
+        const target = `${key} ${humanizeKey(key)} ${Array.isArray(value) ? value.join(' ') : value}`.toLowerCase();
+        return target.includes(filtro);
+      });
+
+      if (!entries.length) {
+        $('mensagensFluxoEditor').innerHTML = '<div class="flow-item"><strong>Nenhum resultado</strong><small>Ajuste o filtro para localizar a mensagem que voce quer editar</small></div>';
+        return;
+      }
+
+      $('mensagensFluxoEditor').innerHTML = entries.map(([key, value]) => `
+        <div class="flow-item">
+          <strong>${humanizeKey(key)}</strong>
+          <small>${key}</small>
+          <textarea data-flow-key="${key}" class="compact" spellcheck="false">${Array.isArray(value) ? value.join('\n') : value || ''}</textarea>
+        </div>
+      `).join('');
+    }
+
+    function coletarMensagensFluxo() {
+      const payload = { ...state.mensagensFluxo };
+      document.querySelectorAll('[data-flow-key]').forEach((el) => {
+        const key = el.dataset.flowKey;
+        const raw = el.value.trim();
+        payload[key] = Array.isArray(state.mensagensFluxo[key])
+          ? raw.split('\n').map((item) => item.trim()).filter(Boolean)
+          : raw;
+      });
+      return payload;
+    }
+
+    async function fetchJson(url, opts) {
+      const res = await fetch(url, opts);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.erro || `Falha em ${url}`);
+      }
+      return data;
+    }
+
+    async function carregarTudo(contexto = state.contexto) {
+      loadingEl.classList.remove('hidden');
+      state.contexto = contexto || state.contexto;
       try {
-        const res = await fetch('/api/prompt', {
-          method: 'PUT', headers: jsonHeaders,
+        const verResumo = podeVerBloco('resumo_operacional');
+        const verPrompt = podeVerBloco('prompt_principal');
+        const verOcr = podeVerBloco('prompt_ocr');
+        const verEstilo = podeVerBloco('estilo_formatacao');
+        const verMensagens = podeVerBloco('mensagens_fluxo');
+        const verAvancado = podeVerBloco('operacao_avancada');
+
+        const [promptData, ocrData, orqData, mensagensData, envioData, tempoData, healthData] = await Promise.all([
+          verPrompt ? fetchJson('/api/prompt') : Promise.resolve(null),
+          verOcr ? fetchJson('/api/config/ocr') : Promise.resolve(null),
+          verEstilo ? fetchJson('/api/config/orquestracao-texto') : Promise.resolve(null),
+          verMensagens ? fetchJson('/api/config/mensagens-fluxo') : Promise.resolve(null),
+          verAvancado ? fetchJson('/api/config/envio') : Promise.resolve(null),
+          verAvancado ? fetchJson('/api/config/tempo') : Promise.resolve(null),
+          verResumo ? fetchJson('/health') : Promise.resolve(null),
+        ]);
+
+        $('prompt').value = promptData?.prompt || '';
+        state.padroes.prompt = promptData?.prompt || '';
+        state.meta.promptAtualizadoEm = promptData?.atualizadoEm || null;
+        $('metaPrompt').textContent = verPrompt
+          ? `${fmtData(promptData?.atualizadoEm)} · ${((promptData?.caracteres || 0)).toLocaleString('pt-BR')} chars`
+          : 'Bloco oculto para este login';
+
+        $('promptOcr').value = ocrData?.prompt || '';
+        state.padroes.ocr = ocrData?.padrao || '';
+        state.meta.ocrAtualizadoEm = ocrData?.atualizadoEm || null;
+        $('metaOcr').textContent = verOcr ? fmtData(ocrData?.atualizadoEm) : 'Bloco oculto para este login';
+
+        $('camadaHumana').value = orqData?.config?.camadaHumana || '';
+        $('instrucaoFormatacao').value = orqData?.config?.instrucaoFormatacao || '';
+        state.padroes.orquestracao = orqData?.padrao || orqData?.config || null;
+        state.meta.orquestracaoAtualizadoEm = orqData?.atualizadoEm || null;
+        $('metaOrquestracao').textContent = verEstilo ? fmtData(orqData?.atualizadoEm) : 'Bloco oculto para este login';
+
+        state.mensagensFluxo = mensagensData?.config || {};
+        state.padroes.mensagensFluxo = mensagensData?.padrao || mensagensData?.config || null;
+        state.meta.mensagensAtualizadoEm = mensagensData?.atualizadoEm || null;
+        $('metaMensagensFluxo').textContent = verMensagens
+          ? fmtData(mensagensData?.atualizadoEm)
+          : 'Bloco oculto para este login';
+        renderMensagensFluxo();
+
+        const envio = envioData?.config || {};
+        state.padroes.envio = envioData?.padrao || envio;
+        $('delayMin').value = envio.delayMinMs ?? 200;
+        $('delayMax').value = envio.delayMaxMs ?? 600;
+        $('digMin').value = envio.digitandoMinMs ?? 300;
+        $('digMax').value = envio.digitandoMaxMs ?? 800;
+        $('digAtivo').checked = envio.digitandoAtivo !== false;
+
+        const tempo = tempoData?.config || {};
+        state.padroes.tempo = tempoData?.padrao || tempo;
+        $('debounceMs').value = tempo.debounceMs ?? 800;
+        $('debounceWorker').value = tempo.debounceWorkerMs ?? 300;
+        const buildAtual = healthData?.build || tempoData?.build || '?';
+        $('metaBuild').textContent = 'build ' + buildAtual;
+        $('buildValue').textContent = verResumo ? buildAtual : '-';
+
+        state.health = healthData;
+        if (healthData) {
+          renderHealth(healthData);
+        }
+        updateCharCounters();
+        if (!verPrompt) $('promptCharsMetric').textContent = '-';
+        if (!verOcr) $('ocrCharsMetric').textContent = '-';
+        if (!verResumo) {
+          $('buildValue').textContent = '-';
+          $('providerValue').textContent = '-';
+          $('healthChips').innerHTML = '';
+        }
+        toast('Painel carregado', 'ok');
+      } catch (error) {
+        toast(error.message || 'Erro ao carregar configuracoes', 'erro');
+      } finally {
+        loadingEl.classList.add('hidden');
+      }
+    }
+
+    function renderHealth(healthData) {
+      const servicos = healthData?.servicos || {};
+      const nomes = [
+        ['redis', 'fila interna'],
+        ['postgres', 'base principal'],
+        ['qdrant', 'base de contexto'],
+        ['evolution', 'conexao do numero'],
+        ['openai', 'modelo principal'],
+        ['groq', 'modelo auxiliar'],
+      ];
+      $('healthChips').innerHTML = nomes.map(([nome, label]) => `
+        <span class="chip"><span class="dot ${servicos[nome] ? 'on' : 'off'}"></span>${label}</span>
+      `).join('');
+      $('providerValue').textContent = servicos.provedorAtivo
+        ? `modelo ativo ${servicos.provedorAtivo}`
+        : 'modelo nao informado';
+    }
+
+    async function salvarPrompt() {
+      const button = $('salvarPrompt');
+      button.disabled = true;
+      try {
+        const data = await fetchJson('/api/prompt', {
+          method: 'PUT',
+          headers: jsonHeaders,
           body: JSON.stringify({ prompt: $('prompt').value }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.erro || 'Erro ao salvar');
-        toast(data.mensagem || 'Prompt salvo!', 'ok');
-        padroes.promptLoaded = $('prompt').value;
-        $('metaPrompt').textContent = fmtData(new Date().toISOString()) + ' · ' + $('prompt').value.length.toLocaleString('pt-BR') + ' chars';
-      } catch (e) { toast(e.message, 'erro'); }
-      finally { $('salvarPrompt').disabled = false; }
+        state.padroes.prompt = $('prompt').value;
+        state.meta.promptAtualizadoEm = new Date().toISOString();
+        $('metaPrompt').textContent = `${fmtData(state.meta.promptAtualizadoEm)} · ${$('prompt').value.length.toLocaleString('pt-BR')} chars`;
+        updateCharCounters();
+        toast(data.mensagem || 'Prompt principal salvo', 'ok');
+      } catch (error) {
+        toast(error.message || 'Erro ao salvar prompt', 'erro');
+      } finally {
+        button.disabled = false;
+      }
     }
 
     async function salvarOcr() {
-      $('salvarOcr').disabled = true;
+      const button = $('salvarOcr');
+      button.disabled = true;
       try {
-        const res = await fetch('/api/config/ocr', {
-          method: 'PUT', headers: jsonHeaders,
+        const data = await fetchJson('/api/config/ocr', {
+          method: 'PUT',
+          headers: jsonHeaders,
           body: JSON.stringify({ prompt: $('promptOcr').value }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.erro || 'Erro');
-        toast(data.mensagem || 'Prompt OCR salvo!', 'ok');
-        $('metaOcr').textContent = fmtData(new Date().toISOString());
-      } catch (e) { toast(e.message, 'erro'); }
-      finally { $('salvarOcr').disabled = false; }
+        state.meta.ocrAtualizadoEm = new Date().toISOString();
+        $('metaOcr').textContent = fmtData(state.meta.ocrAtualizadoEm);
+        updateCharCounters();
+        toast(data.mensagem || 'Prompt OCR salvo', 'ok');
+      } catch (error) {
+        toast(error.message || 'Erro ao salvar OCR', 'erro');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function salvarOrquestracao() {
+      const button = $('salvarOrquestracao');
+      button.disabled = true;
+      try {
+        const data = await fetchJson('/api/config/orquestracao-texto', {
+          method: 'PUT',
+          headers: jsonHeaders,
+          body: JSON.stringify({
+            camadaHumana: $('camadaHumana').value,
+            instrucaoFormatacao: $('instrucaoFormatacao').value,
+          }),
+        });
+        state.meta.orquestracaoAtualizadoEm = new Date().toISOString();
+        $('metaOrquestracao').textContent = fmtData(state.meta.orquestracaoAtualizadoEm);
+        toast(data.mensagem || 'Estilo e formatacao salvos', 'ok');
+      } catch (error) {
+        toast(error.message || 'Erro ao salvar orquestracao', 'erro');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function salvarMensagensFluxo() {
+      const button = $('salvarMensagensFluxo');
+      button.disabled = true;
+      try {
+        const payload = coletarMensagensFluxo();
+        const data = await fetchJson('/api/config/mensagens-fluxo', {
+          method: 'PUT',
+          headers: jsonHeaders,
+          body: JSON.stringify(payload),
+        });
+        state.mensagensFluxo = payload;
+        state.meta.mensagensAtualizadoEm = new Date().toISOString();
+        $('metaMensagensFluxo').textContent = fmtData(state.meta.mensagensAtualizadoEm);
+        toast(data.mensagem || 'Mensagens de fluxo salvas', 'ok');
+      } catch (error) {
+        toast(error.message || 'Erro ao salvar mensagens de fluxo', 'erro');
+      } finally {
+        button.disabled = false;
+      }
     }
 
     async function salvarEnvio() {
-      $('salvarEnvio').disabled = true;
+      const button = $('salvarEnvio');
+      button.disabled = true;
       try {
-        const res = await fetch('/api/config/envio', {
-          method: 'PUT', headers: jsonHeaders,
+        const data = await fetchJson('/api/config/envio', {
+          method: 'PUT',
+          headers: jsonHeaders,
           body: JSON.stringify({
             delayMinMs: parseInt($('delayMin').value, 10),
             delayMaxMs: parseInt($('delayMax').value, 10),
@@ -485,114 +954,176 @@
             digitandoAtivo: $('digAtivo').checked,
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.erro || 'Erro');
-        toast('Humanização salva!', 'ok');
-      } catch (e) { toast(e.message, 'erro'); }
-      finally { $('salvarEnvio').disabled = false; }
+        toast(data.mensagem || 'Humanizacao salva', 'ok');
+      } catch (error) {
+        toast(error.message || 'Erro ao salvar humanizacao', 'erro');
+      } finally {
+        button.disabled = false;
+      }
     }
 
     async function salvarTempo() {
-      $('salvarTempo').disabled = true;
+      const button = $('salvarTempo');
+      button.disabled = true;
       try {
-        const res = await fetch('/api/config/tempo', {
-          method: 'PUT', headers: jsonHeaders,
+        const data = await fetchJson('/api/config/tempo', {
+          method: 'PUT',
+          headers: jsonHeaders,
           body: JSON.stringify({
             debounceMs: parseInt($('debounceMs').value, 10),
             debounceWorkerMs: parseInt($('debounceWorker').value, 10),
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.erro || 'Erro');
-        toast(data.mensagem || 'Tempos salvos!', 'ok');
-      } catch (e) { toast(e.message, 'erro'); }
-      finally { $('salvarTempo').disabled = false; }
+        toast(data.mensagem || 'Tempos salvos', 'ok');
+      } catch (error) {
+        toast(error.message || 'Erro ao salvar tempos', 'erro');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function salvarTudoPrincipal() {
+      const button = $('salvarTudo');
+      button.disabled = true;
+      try {
+        await salvarPrompt();
+        await salvarOcr();
+        await salvarOrquestracao();
+        toast('Textos principais salvos', 'ok');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function insertQuickPrompt() {
+      const texto = $('quickPrompt').value.trim();
+      if (!texto) {
+        toast('Escreva uma instrucao antes de inserir', 'erro');
+        return false;
+      }
+      const target = $('quickTarget').value;
+      const targetMap = {
+        prompt: $('prompt'),
+        camadaHumana: $('camadaHumana'),
+        promptOcr: $('promptOcr'),
+      };
+      const field = targetMap[target];
+      const bloco = `\n\n[ajuste direto do operador]\n${texto.trim()}`;
+      field.value = field.value.trim() ? field.value.trim() + bloco : texto.trim();
+      $('quickPrompt').value = '';
+      updateCharCounters();
+      toast('Instrucao inserida no editor escolhido', 'ok');
+      field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      field.focus();
+      return true;
+    }
+
+    async function saveQuickPrompt() {
+      const target = $('quickTarget').value;
+      const ok = insertQuickPrompt();
+      if (!ok) return;
+      if (target === 'prompt') return salvarPrompt();
+      if (target === 'camadaHumana') return salvarOrquestracao();
+      if (target === 'promptOcr') return salvarOcr();
     }
 
     async function reloadApp() {
-      if (!confirm('Reiniciar o processo Node agora?')) return;
-      $('reloadApp').disabled = true;
+      if (!confirm('Recarregar o processo Node agora?')) return;
+      const button = $('reloadApp');
+      button.disabled = true;
       try {
-        const res = await fetch('/api/admin/reload-processo', { method: 'POST', headers: jsonHeaders });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.erro || 'Erro');
-        toast(data.mensagem + ' (build ' + (data.build || '?') + ')', 'ok');
-      } catch (e) { toast(e.message, 'erro'); }
-      finally { $('reloadApp').disabled = false; }
+        const data = await fetchJson('/api/admin/reload-processo', {
+          method: 'POST',
+          headers: jsonHeaders,
+        });
+        toast((data.mensagem || 'Processo recarregado') + ' (build ' + (data.build || '?') + ')', 'ok');
+      } catch (error) {
+        toast(error.message || 'Erro ao recarregar', 'erro');
+      } finally {
+        button.disabled = false;
+      }
     }
 
-    async function verificarSaude() {
-      try {
-        const res = await fetch('/health');
-        const data = await res.json();
-        const s = data.servicos || {};
-        const nomes = ['redis', 'postgres', 'qdrant', 'evolution', 'openai', 'groq'];
-        $('healthChips').innerHTML = nomes.map(n => {
-          const ok = s[n];
-          const label = n.charAt(0).toUpperCase() + n.slice(1);
-          return `<span class="chip"><span class="dot ${ok ? 'on' : 'off'}"></span>${label}</span>`;
-        }).join('');
-        if (data.servicos?.provedorAtivo) {
-          $('buildInfo').textContent = 'Build ' + (data.build || '?') + ' · ' + data.servicos.provedorAtivo;
-        }
-      } catch { $('healthChips').textContent = 'offline'; }
-    }
-
-    // Nav tabs
-    document.querySelectorAll('.nav button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.panel;
-        document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b === btn));
-        document.querySelectorAll('.panel').forEach(p => p.classList.toggle('ativo', p.id === 'panel-' + id));
-        const p = panels[id];
-        $('panelTitle').textContent = p.title;
-        $('panelHint').textContent = p.hint;
-      });
-    });
-
-    $('prompt').addEventListener('input', () => atualizarChars($('prompt'), 'charsPrompt'));
-    $('promptOcr').addEventListener('input', () => atualizarChars($('promptOcr'), 'charsOcr'));
-
-    $('btnRecarregar').addEventListener('click', carregarTudo);
+    $('btnRecarregar').addEventListener('click', () => carregarTudo(state.contexto));
+    $('salvarTudo').addEventListener('click', salvarTudoPrincipal);
     $('salvarPrompt').addEventListener('click', salvarPrompt);
     $('salvarOcr').addEventListener('click', salvarOcr);
+    $('salvarOrquestracao').addEventListener('click', salvarOrquestracao);
+    $('salvarMensagensFluxo').addEventListener('click', salvarMensagensFluxo);
     $('salvarEnvio').addEventListener('click', salvarEnvio);
     $('salvarTempo').addEventListener('click', salvarTempo);
     $('reloadApp').addEventListener('click', reloadApp);
+    $('insertQuickPrompt').addEventListener('click', insertQuickPrompt);
+    $('saveQuickPrompt').addEventListener('click', saveQuickPrompt);
+    $('mensagensFiltro').addEventListener('input', renderMensagensFluxo);
+    $('prompt').addEventListener('input', updateCharCounters);
+    $('promptOcr').addEventListener('input', updateCharCounters);
 
     $('restaurarPrompt').addEventListener('click', () => {
-      if (confirm('Descartar alterações e voltar ao texto carregado do servidor?')) {
-        $('prompt').value = padroes.promptLoaded || '';
-        atualizarChars($('prompt'), 'charsPrompt');
-      }
+      $('prompt').value = state.padroes.prompt || '';
+      updateCharCounters();
+      toast('Prompt principal restaurado para o texto carregado', 'info');
     });
     $('restaurarOcr').addEventListener('click', () => {
-      if (padroes.ocrPadrao && confirm('Restaurar prompt OCR padrão de fábrica?')) {
-        $('promptOcr').value = padroes.ocrPadrao;
-        atualizarChars($('promptOcr'), 'charsOcr');
-      }
+      $('promptOcr').value = state.padroes.ocr || '';
+      updateCharCounters();
+      toast('Prompt OCR restaurado para o padrao', 'info');
+    });
+    $('restaurarOrquestracao').addEventListener('click', () => {
+      const padrao = state.padroes.orquestracao || {};
+      $('camadaHumana').value = padrao.camadaHumana || '';
+      $('instrucaoFormatacao').value = padrao.instrucaoFormatacao || '';
+      toast('Estilo e formatacao restaurados para o padrao', 'info');
+    });
+    $('restaurarMensagensFluxo').addEventListener('click', () => {
+      state.mensagensFluxo = JSON.parse(JSON.stringify(state.padroes.mensagensFluxo || {}));
+      renderMensagensFluxo();
+      toast('Mensagens de fluxo restauradas para o padrao', 'info');
     });
     $('restaurarEnvio').addEventListener('click', () => {
-      const p = padroes.envio;
-      if (!p) return;
-      $('delayMin').value = p.delayMinMs;
-      $('delayMax').value = p.delayMaxMs;
-      $('digMin').value = p.digitandoMinMs;
-      $('digMax').value = p.digitandoMaxMs;
+      const p = state.padroes.envio || {};
+      $('delayMin').value = p.delayMinMs ?? 200;
+      $('delayMax').value = p.delayMaxMs ?? 600;
+      $('digMin').value = p.digitandoMinMs ?? 300;
+      $('digMax').value = p.digitandoMaxMs ?? 800;
       $('digAtivo').checked = p.digitandoAtivo !== false;
-      toast('Valores padrão restaurados — salve para aplicar', 'info');
+      toast('Humanizacao restaurada para o padrao', 'info');
     });
     $('restaurarTempo').addEventListener('click', () => {
-      const p = padroes.tempo;
-      if (!p) return;
-      $('debounceMs').value = p.debounceMs;
-      $('debounceWorker').value = p.debounceWorkerMs;
-      toast('Valores padrão restaurados — salve para aplicar', 'info');
+      const p = state.padroes.tempo || {};
+      $('debounceMs').value = p.debounceMs ?? 800;
+      $('debounceWorker').value = p.debounceWorkerMs ?? 300;
+      toast('Tempos restaurados para o padrao', 'info');
     });
 
-    carregarTudo();
-    verificarSaude();
-    setInterval(verificarSaude, 20000);
+    IagmxPainelAuth.boot({
+      blockMap: {
+        resumo_operacional: '[data-bloco="resumo_operacional"]',
+        comando_rapido: '[data-bloco="comando_rapido"]',
+        prompt_principal: '[data-bloco="prompt_principal"]',
+        prompt_ocr: '[data-bloco="prompt_ocr"]',
+        estilo_formatacao: '[data-bloco="estilo_formatacao"]',
+        mensagens_fluxo: '[data-bloco="mensagens_fluxo"]',
+        operacao_avancada: '[data-bloco="operacao_avancada"]',
+        editor_visual: '[data-nav-bloco="editor_visual"]',
+        painel_etapas: '[data-nav-bloco="painel_etapas"]',
+      },
+      onReady(contexto) {
+        state.contexto = contexto;
+        aplicarModoSomenteLeitura();
+        carregarTudo(contexto);
+        setInterval(async () => {
+          if (!podeVerBloco('resumo_operacional')) return;
+          try {
+            const health = await fetchJson('/health');
+            state.health = health;
+            renderHealth(health);
+          } catch {
+            $('healthChips').innerHTML = '<span class="chip"><span class="dot off"></span>indisponivel</span>';
+          }
+        }, 20000);
+      },
+    });
   </script>
 </body>
 </html>

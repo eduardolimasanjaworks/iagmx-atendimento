@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pipeline IA GMX</title>
+  <title>Painel de etapas - IA GMX</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      background: linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
+      color: #132033;
       min-height: 100vh;
       padding: 1.25rem;
     }
-    a { color: #60a5fa; }
+    a { color: #2563eb; }
     header {
       max-width: 960px;
       margin: 0 auto 1rem;
@@ -24,12 +24,12 @@
       justify-content: space-between;
     }
     h1 { font-size: 1.35rem; }
-    .sub { color: #94a3b8; font-size: .875rem; margin-top: .25rem; }
+    .sub { color: #62748b; font-size: .875rem; margin-top: .25rem; }
     input {
-      background: #1e293b;
-      border: 1px solid #334155;
+      background: #f8fbff;
+      border: 1px solid #d7e0ee;
       border-radius: 8px;
-      color: #e2e8f0;
+      color: #132033;
       padding: .55rem .75rem;
       font-size: .875rem;
       min-width: 200px;
@@ -46,12 +46,13 @@
     button:hover { background: #2563eb; }
     .lista { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: .75rem; }
     .card {
-      background: #1e293b;
-      border: 1px solid #334155;
+      background: rgba(255,255,255,.94);
+      border: 1px solid #d7e0ee;
       border-radius: 10px;
       padding: 1rem 1.1rem;
       cursor: pointer;
       transition: border-color .15s;
+      box-shadow: 0 12px 30px rgba(15,23,42,.06);
     }
     .card:hover, .card.ativo { border-color: #3b82f6; }
     .card-top {
@@ -61,7 +62,7 @@
       flex-wrap: wrap;
       margin-bottom: .5rem;
     }
-    .tel { font-weight: 600; color: #f8fafc; }
+    .tel { font-weight: 600; color: #132033; }
     .badge {
       font-size: .75rem;
       padding: .15rem .5rem;
@@ -69,13 +70,13 @@
       font-weight: 600;
       text-transform: uppercase;
     }
-    .badge.ok { background: #14532d; color: #86efac; }
-    .badge.processando { background: #1e3a5f; color: #93c5fd; }
-    .badge.enfileirado { background: #422006; color: #fcd34d; }
-    .badge.erro { background: #450a0a; color: #fca5a5; }
-    .badge.silencio { background: #334155; color: #cbd5e1; }
-    .entrada { font-size: .875rem; color: #94a3b8; margin-bottom: .75rem; word-break: break-word; }
-    .etapas { border-left: 2px solid #334155; margin-left: .35rem; padding-left: .85rem; }
+    .badge.ok { background: #dcfce7; color: #166534; }
+    .badge.processando { background: #dbeafe; color: #1d4ed8; }
+    .badge.enfileirado { background: #fef3c7; color: #92400e; }
+    .badge.erro { background: #fee2e2; color: #b91c1c; }
+    .badge.silencio { background: #eef3fb; color: #62748b; }
+    .entrada { font-size: .875rem; color: #62748b; margin-bottom: .75rem; word-break: break-word; }
+    .etapas { border-left: 2px solid #d7e0ee; margin-left: .35rem; padding-left: .85rem; }
     .etapa { margin-bottom: .65rem; position: relative; }
     .etapa::before {
       content: '';
@@ -87,11 +88,11 @@
       border-radius: 50%;
       background: #3b82f6;
     }
-    .etapa-titulo { font-size: .875rem; font-weight: 600; color: #f1f5f9; }
-    .etapa-meta { font-size: .75rem; color: #64748b; }
+    .etapa-titulo { font-size: .875rem; font-weight: 600; color: #132033; }
+    .etapa-meta { font-size: .75rem; color: #62748b; }
     .etapa-detalhe {
       font-size: .75rem;
-      color: #94a3b8;
+      color: #62748b;
       margin-top: .2rem;
       font-family: ui-monospace, monospace;
       white-space: pre-wrap;
@@ -100,23 +101,22 @@
     .resposta {
       margin-top: .75rem;
       padding: .65rem .75rem;
-      background: #0f172a;
+      background: #f8fbff;
       border-radius: 8px;
       font-size: .875rem;
-      color: #4ade80;
+      color: #15803d;
     }
-    #status { max-width: 960px; margin: 0 auto 1rem; font-size: .875rem; color: #94a3b8; }
-    .vazio { text-align: center; color: #64748b; padding: 3rem 1rem; }
+    #status { max-width: 960px; margin: 0 auto 1rem; font-size: .875rem; color: #62748b; }
+    .vazio { text-align: center; color: #62748b; padding: 3rem 1rem; }
   </style>
 </head>
 <body>
   <header>
     <div>
-      <h1>Pipeline de mensagens</h1>
-      <p class="sub">Veja cada etapa: webhook → debounce → roteador → LLM/fluxo → envio</p>
+      <h1>Painel de etapas das conversas</h1>
+      <p class="sub">Veja como cada conversa passa pelas etapas internas antes da resposta final</p>
     </div>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-      <input type="password" id="adminKey" placeholder="Chave admin" />
+    <div class="top-actions" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
       <button type="button" id="atualizar">Atualizar</button>
       <a href="/">← Config</a>
     </div>
@@ -124,22 +124,25 @@
   <div id="status">Carregando...</div>
   <div class="lista" id="lista"></div>
 
+  <script src="/painel-auth.js"></script>
   <script>
-    const adminKeyEl = document.getElementById('adminKey');
     const listaEl = document.getElementById('lista');
     const statusEl = document.getElementById('status');
+    const atualizarBtn = document.getElementById('atualizar');
     let expandido = null;
+    let pollTimer = null;
 
-    adminKeyEl.value = localStorage.getItem('iagmx_admin_key') || '';
-    adminKeyEl.addEventListener('change', () => {
-      localStorage.setItem('iagmx_admin_key', adminKeyEl.value.trim());
-    });
+    function pararAutoAtualizacao() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
 
-    function headers() {
-      const h = {};
-      const k = adminKeyEl.value.trim() || localStorage.getItem('iagmx_admin_key') || '';
-      if (k) h['x-iagmx-key'] = k;
-      return h;
+    function iniciarAutoAtualizacao() {
+      if (!pollTimer) {
+        pollTimer = setInterval(carregar, 2000);
+      }
     }
 
     function badgeClass(s) {
@@ -180,10 +183,17 @@
 
     async function carregar() {
       try {
-        const res = await fetch('/api/pipeline/traces?limite=25', { headers: headers() });
+        const res = await fetch('/api/pipeline/traces?limite=25');
         const data = await res.json();
-        if (!res.ok) throw new Error(data.erro || 'Não autorizado');
+        if (res.status === 401 || res.status === 403) {
+          pararAutoAtualizacao();
+          statusEl.textContent = 'Seu login nao tem acesso a esta area';
+          listaEl.innerHTML = '<div class="vazio">Esta area foi bloqueada para o seu perfil</div>';
+          return;
+        }
+        if (!res.ok) throw new Error(data.erro || 'Erro ao carregar pipeline');
         statusEl.textContent = `Build ${data.build} · ${data.total} conversa(s) recente(s) · atualiza a cada 2s`;
+        iniciarAutoAtualizacao();
         if (!data.traces?.length) {
           listaEl.innerHTML = '<div class="vazio">Nenhuma mensagem processada ainda. Mande um oi no WhatsApp.</div>';
           return;
@@ -200,10 +210,13 @@
         listaEl.innerHTML = '';
       }
     }
-
-    document.getElementById('atualizar').addEventListener('click', carregar);
-    carregar();
-    setInterval(carregar, 2000);
+    atualizarBtn.addEventListener('click', carregar);
+    IagmxPainelAuth.boot({
+      requiredBlock: 'painel_etapas',
+      onReady() {
+        carregar();
+      },
+    });
   </script>
 </body>
 </html>

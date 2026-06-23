@@ -11,7 +11,8 @@ import {
   inicializarProvedorChat,
   provedorChatAtivo,
 } from './chat-providers.js';
-import { obterPromptOcr, OCR_PROMPT_FORCADO } from './config-ocr.js';
+import { obterPromptOcr, obterPromptOcrForcado } from './config-ocr.js';
+import { montarResumoSchemaOcr } from './config-ocr-documentos.js';
 import { ehRecusaOcr, textoOcrValido } from '../util/ocr-qualidade.js';
 import { validarOpenAI } from './tokens.js';
 
@@ -184,12 +185,13 @@ export async function extrairTextoImagem(
     return texto;
   };
 
-  const promptPadrao = await obterPromptOcr();
+  const resumoSchema = await montarResumoSchemaOcr().catch(() => '');
+  const promptPadrao = [await obterPromptOcr(), resumoSchema].filter(Boolean).join('\n\n');
   let texto = await tentar(promptPadrao);
 
   if (!textoOcrValido(texto) || ehRecusaOcr(texto)) {
     console.warn('[ocr] Primeira leitura inválida/recusada — retentando com prompt forçado');
-    texto = await tentar(OCR_PROMPT_FORCADO, true);
+    texto = await tentar([await obterPromptOcrForcado(), resumoSchema].filter(Boolean).join('\n\n'), true);
   }
 
   return texto;

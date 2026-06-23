@@ -2,12 +2,11 @@
  * Uma chamada ao LLM — conversa natural (saudação, dúvidas gerais).
  * Evita o pipeline de 5+ passadas que atrasa e engessa o tom.
  */
-import { CAMADA_HUMANA } from './camada-humana.js';
-import { config } from '../config.js';
 import { chatCompletionRaw } from './chat-providers.js';
 import { extrairRespostaMotorista, sanitizarVazamentoPensamento } from './cadeia-pensamento.js';
 import { montarPromptCompactoPassadas, type PlanoResposta } from './inferencia-refinada.js';
 import { normalizarRespostaWhatsapp } from './mensagem.js';
+import { montarCabecalhoOrquestracao } from './config-orquestracao-texto.js';
 
 function extrairTrechoCenario(promptCompleto: string, numero: number): string {
   const regex = new RegExp(`CENÁRIO ${numero}:[\\s\\S]*?(?=\\nCENÁRIO \\d+:|$)`, 'i');
@@ -24,16 +23,16 @@ export async function gerarConversaRapida(opts: {
 }): Promise<string> {
   const mensagemAtual = opts.mensagensUsuario.join('\n\n');
   const numeroCenario = opts.cenario ?? 6;
+  const cabecalhoOrquestracao = await montarCabecalhoOrquestracao();
 
   const promptSistema =
     numeroCenario === 6
-      ? montarPromptCompactoPassadas(opts.promptCompleto, {
+      ? await montarPromptCompactoPassadas(opts.promptCompleto, {
           cenario: 'CENÁRIO 6',
           ferramentas: [],
           observacoes: `conversa_rapida:${opts.intencaoRoteador ?? 'llm'}`,
         } satisfies PlanoResposta)
-      : `${CAMADA_HUMANA}
-${config.instrucaoFormatacao}
+      : `${cabecalhoOrquestracao}
 
 ${extrairTrechoCenario(opts.promptCompleto, numeroCenario) || opts.promptCompleto.slice(0, 3000)}
 

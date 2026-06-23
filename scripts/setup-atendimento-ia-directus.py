@@ -6,7 +6,7 @@ import sys
 import urllib.error
 import urllib.request
 
-BASE = os.environ.get('DIRECTUS_URL', 'http://91.99.137.101:8057').rstrip('/')
+BASE = os.environ.get('DIRECTUS_URL', 'https://gmx.sanjaworks.com/api').rstrip('/')
 EMAIL = os.environ.get('DIRECTUS_ADMIN_EMAIL', 'gmx@gmx.com')
 PASSWORD = os.environ.get('DIRECTUS_ADMIN_PASSWORD', 'admin123')
 

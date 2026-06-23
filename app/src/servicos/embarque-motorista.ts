@@ -12,6 +12,9 @@ export interface EmbarqueAtivo {
   status?: string;
   origin?: string;
   destination?: string;
+  operacao?: string | null;
+  rota_status?: string | null;
+  config_rota_id?: number | string | null;
   valor_ofertado?: number | string | null;
   valor_minimo?: number | string | null;
   valor_maximo?: number | string | null;
@@ -31,7 +34,8 @@ const STATUS_ATIVO = [
 /** Embarques ativos (driver_id ou oferta_motorista_id). */
 export async function listarEmbarquesAtivos(motoristaId: number): Promise<EmbarqueAtivo[]> {
   if (!directusConfigurado()) return [];
-  const campos = 'id,status,origin,destination,valor_ofertado,valor_minimo,valor_maximo,total_value';
+  const campos =
+    'id,status,origin,destination,operacao,rota_status,config_rota_id,valor_ofertado,valor_minimo,valor_maximo,total_value';
   const [a, b] = await Promise.all([
     directusListar<EmbarqueAtivo>('embarques', {
       'filter[driver_id][_eq]': String(motoristaId),
@@ -66,6 +70,48 @@ export async function obterEmbarqueAtivoPrincipal(telefone: string): Promise<Emb
   return lista[0] ?? null;
 }
 
+function normalizarTrecho(texto?: string | null): string {
+  return String(texto ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export async function resolverEmbarqueAtivoPorTelefone(opts: {
+  telefone: string;
+  embarqueId?: string | number | null;
+  origem?: string | null;
+  destino?: string | null;
+}): Promise<EmbarqueAtivo | null> {
+  if (opts.embarqueId != null) {
+    return { id: opts.embarqueId };
+  }
+  const motorista = await buscarMotoristaPorTelefone(opts.telefone);
+  if (!motorista) return null;
+  const ativos = await listarEmbarquesAtivos(motorista.id);
+  if (ativos.length === 0) return null;
+  if (ativos.length === 1) return ativos[0];
+
+  const origem = normalizarTrecho(opts.origem);
+  const destino = normalizarTrecho(opts.destino);
+  if (origem || destino) {
+    const candidatos = ativos.filter((item) => {
+      const origemItem = normalizarTrecho(item.origin);
+      const destinoItem = normalizarTrecho(item.destination);
+      const origemOk = !origem || origemItem.includes(origem) || origem.includes(origemItem);
+      const destinoOk = !destino || destinoItem.includes(destino) || destino.includes(destinoItem);
+      return origemOk && destinoOk;
+    });
+    if (candidatos.length === 1) return candidatos[0];
+  }
+
+  throw new Error(
+    `embarque_ambiguo: o motorista possui ${ativos.length} embarques ativos e a IA precisa de embarque_id explicito`,
+  );
+}
+
 /** Grava canhoto/comprovante de entrega no embarque ativo. */
 export async function gravarCanhotoEmbarque(opts: {
   telefone: string;
@@ -97,4 +143,29 @@ export async function gravarCanhotoEmbarque(opts: {
   }
 
   return { fileUrl, registroId: (registro as { id?: unknown }).id };
+}
+
+export async function verificarCanhotoEmbarqueNoErp(opts: {
+  embarqueId: string | number;
+  fileUrl?: string;
+}): Promise<{ ok: boolean; registro?: Record<string, unknown>; motivo?: string }> {
+  const lista = await directusListar<Record<string, unknown>>('delivery_receipts', {
+    'filter[shipment_id][_eq]': String(opts.embarqueId),
+    sort: '-id',
+    limit: '5',
+    fields: 'id,shipment_id,file_url,file_name,verified',
+  }).catch(() => []);
+
+  const registro = lista.find((item) => {
+    if (!opts.fileUrl) return true;
+    return String(item.file_url ?? '') === opts.fileUrl;
+  });
+
+  if (!registro) {
+    return {
+      ok: false,
+      motivo: `canhoto não encontrado no embarque ${String(opts.embarqueId)}`,
+    };
+  }
+  return { ok: true, registro };
 }

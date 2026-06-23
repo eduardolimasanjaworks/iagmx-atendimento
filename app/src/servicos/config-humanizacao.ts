@@ -8,6 +8,9 @@ const pool = new pg.Pool({ connectionString: config.databaseUrl });
 const CHAVE = 'humanizacao_envio';
 
 export interface ConfigHumanizacao {
+  /** Atraso antes do primeiro envio da resposta completa (ms) */
+  atrasoInicialMinMs: number;
+  atrasoInicialMaxMs: number;
   /** Delay aleatório entre mensagens (ms) */
   delayMinMs: number;
   delayMaxMs: number;
@@ -19,10 +22,12 @@ export interface ConfigHumanizacao {
 }
 
 export const HUMANIZACAO_PADRAO: ConfigHumanizacao = {
-  delayMinMs: 200,
-  delayMaxMs: 600,
-  digitandoMinMs: 300,
-  digitandoMaxMs: 800,
+  atrasoInicialMinMs: 300_000,
+  atrasoInicialMaxMs: 600_000,
+  delayMinMs: 1800,
+  delayMaxMs: 4200,
+  digitandoMinMs: 1200,
+  digitandoMaxMs: 3200,
   digitandoAtivo: true,
 };
 
@@ -32,11 +37,15 @@ const CACHE_TTL_MS = 5000;
 
 function normalizar(partial: Partial<ConfigHumanizacao>): ConfigHumanizacao {
   const base = { ...HUMANIZACAO_PADRAO, ...partial };
-  const delayMinMs = Math.max(0, Math.min(base.delayMinMs, base.delayMaxMs));
-  const delayMaxMs = Math.max(delayMinMs, base.delayMaxMs);
-  const digitandoMinMs = Math.max(0, Math.min(base.digitandoMinMs, base.digitandoMaxMs));
-  const digitandoMaxMs = Math.max(digitandoMinMs, base.digitandoMaxMs);
+  const atrasoInicialMinMs = Math.max(60_000, Math.min(base.atrasoInicialMinMs, base.atrasoInicialMaxMs));
+  const atrasoInicialMaxMs = Math.min(900_000, Math.max(atrasoInicialMinMs, base.atrasoInicialMaxMs));
+  const delayMinMs = Math.max(1200, Math.min(base.delayMinMs, base.delayMaxMs));
+  const delayMaxMs = Math.min(10000, Math.max(delayMinMs, base.delayMaxMs));
+  const digitandoMinMs = Math.max(1000, Math.min(base.digitandoMinMs, base.digitandoMaxMs));
+  const digitandoMaxMs = Math.min(12000, Math.max(digitandoMinMs, base.digitandoMaxMs));
   return {
+    atrasoInicialMinMs,
+    atrasoInicialMaxMs,
     delayMinMs,
     delayMaxMs,
     digitandoMinMs,

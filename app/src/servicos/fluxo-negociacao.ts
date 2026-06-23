@@ -45,6 +45,7 @@ function dadosOferta(faixa: FaixaNegociacao, telefone: string) {
   return {
     origem: faixa.origem,
     destino: faixa.destino,
+    config_rota_id: faixa.configRotaId ?? undefined,
     valor_ofertado: faixa.valorOfertado,
     valor_minimo: faixa.valorMinimo,
     valor_maximo: faixa.valorMaximo,

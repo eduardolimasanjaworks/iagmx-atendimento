@@ -1,0 +1,53 @@
+/**
+ * Estilos isolados do editor embutido da tela /phone.
+ * Mantem o CSS modularizado sem aumentar ainda mais o arquivo principal.
+ * Foca em listas editaveis de OCR e grids extras do painel editor.
+ */
+.compact-switch {
+  margin-bottom: 1rem;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+  margin-top: .9rem;
+}
+
+.stack-list {
+  display: grid;
+  gap: .75rem;
+}
+
+.stack-item {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  padding: .8rem;
+}
+
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+}
+
+.stack-remove {
+  margin-top: .7rem;
+}
+
+.stack-empty {
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  padding: .9rem;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: .86rem;
+}
+
+@media (max-width: 960px) {
+  .grid-3,
+  .stack-grid {
+    grid-template-columns: 1fr;
+  }
+}

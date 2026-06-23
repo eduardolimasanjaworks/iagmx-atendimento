@@ -530,8 +530,18 @@ async function rodarFluxo(fluxo, promptBase) {
     let bruto = await gerarResposta(turno.user, historico, turno.contextoExtra ?? '', promptBase);
     let aval = avaliarTurno(bruto, turno.espera);
     if (!aval.ok && turno.espera.ferramenta) {
+      const lembreteFerramenta = turno.espera.ferramenta;
+      const lembreteJson = JSON.stringify({
+        ferramenta: lembreteFerramenta.nome,
+        dados: lembreteFerramenta.dados ?? {},
+      });
       await new Promise((r) => setTimeout(r, 2000));
-      bruto = await gerarResposta(turno.user, historico, `${turno.contextoExtra ?? ''}\nLEMBRETE: inclua JSON da ferramenta ao final.`, promptBase);
+      bruto = await gerarResposta(
+        turno.user,
+        historico,
+        `${turno.contextoExtra ?? ''}\nLEMBRETE: inclua JSON da ferramenta ao final nesta estrutura exata: ${lembreteJson}`,
+        promptBase,
+      );
       aval = avaliarTurno(bruto, turno.espera);
     }
 

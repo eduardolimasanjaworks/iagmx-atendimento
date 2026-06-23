@@ -1,7 +1,31 @@
+networks:
+  gmx_net:
+    external: true
+    name: gmx_net
+
 services:
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: iagmx_caddy
+    networks: [gmx_net]
+    restart: unless-stopped
+    ports:
+      - '0.0.0.0:80:80'
+      - '0.0.0.0:443:443'
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - iagmx_caddy_data:/data
+      - iagmx_caddy_config:/config
+    depends_on:
+      app:
+        condition: service_started
+      evolution-api:
+        condition: service_started
+
   postgres:
     image: postgres:15-alpine
     container_name: iagmx_postgres
+    networks: [gmx_net]
     restart: unless-stopped
     ports:
       - '127.0.0.1:5433:5432'
@@ -9,6 +33,7 @@ services:
       POSTGRES_DB: iagmx
       POSTGRES_USER: iagmx
       POSTGRES_PASSWORD: iagmx_secret
+    command: postgres -c shared_buffers=512MB -c effective_cache_size=1536MB -c work_mem=16MB -c max_connections=100
     volumes:
       - iagmx_pg_data:/var/lib/postgresql/data
       - ./postgres/init-evolution.sql:/docker-entrypoint-initdb.d/02-evolution.sql:ro
@@ -21,10 +46,11 @@ services:
   redis:
     image: redis:7-alpine
     container_name: iagmx_redis
+    networks: [gmx_net]
     restart: unless-stopped
     ports:
       - '127.0.0.1:6380:6379'
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - iagmx_redis_data:/data
     healthcheck:
@@ -46,6 +72,7 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.12.5
     container_name: iagmx_qdrant
+    networks: [gmx_net]
     restart: unless-stopped
     ports:
       - '127.0.0.1:6333:6333'
@@ -53,11 +80,14 @@ services:
       - iagmx_qdrant_data:/qdrant/storage
 
   evolution-api:
-    image: evoapicloud/evolution-api:v2.3.7
+    # Build mais nova do mesmo repositório para reduzir a chance do fluxo 515 -> 401 -> device_removed
+    # observado na v2.3.7 apos o primeiro envio.
+    image: evoapicloud/evolution-api:latest@sha256:966625532d9076a2381e973a271307d107e6f070450de3abeeea8bd18be07252
     container_name: iagmx_evolution
+    networks: [gmx_net]
     restart: unless-stopped
     ports:
-      - '127.0.0.1:8094:8080'
+      - '0.0.0.0:8094:8080'
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,13 +115,19 @@ services:
       CACHE_REDIS_SAVE_INSTANCES: 'false'
       CACHE_LOCAL_ENABLED: 'false'
       WEBHOOK_GLOBAL_ENABLED: 'false'
+      PROXY_HOST: ${EVOLUTION_PROXY_HOST:-}
+      PROXY_PORT: ${EVOLUTION_PROXY_PORT:-}
+      PROXY_PROTOCOL: ${EVOLUTION_PROXY_PROTOCOL:-}
+      PROXY_USERNAME: ${EVOLUTION_PROXY_USERNAME:-}
+      PROXY_PASSWORD: ${EVOLUTION_PROXY_PASSWORD:-}
 
   app:
     build: ./app
     container_name: iagmx_app
+    networks: [gmx_net]
     restart: unless-stopped
     ports:
-      - '127.0.0.1:8095:8095'
+      - '0.0.0.0:8095:8095'
     env_file:
       - .env
     depends_on:
@@ -106,21 +142,27 @@ services:
     environment:
       EVOLUTION_URL: http://evolution-api:8080
       EVOLUTION_API_KEY: iagmx-evolution-key-2026
-      EVOLUTION_INSTANCE: gmx-atendimento
+      # Conexao ativa da IA hoje: manter separada do outro fluxo externo ate a virada planejada.
+      # Nao reutilizar aqui a mesma instancia que estiver em outro servidor/Chatwoot.
+      EVOLUTION_INSTANCE: gmx-atendimento-v2
+      # Preparacao futura: deixar desabilitado enquanto a IA seguir local.
+      WHATSAPP_CHATWOOT_FUTURO_HABILITADO: 'false'
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://iagmx:iagmx_secret@postgres:5432/iagmx
       QDRANT_URL: http://qdrant:6333
-      DIRECTUS_URL: http://91.99.137.101:8057
-      DIRECTUS_TOKEN: iagmx-1d3382c3bc7ffaff6ca4e00490eac00620b45c9d17eae5ef
+      DIRECTUS_URL: http://gmx_app:8055
       IAGMX_ADMIN_KEY: iagmx-pausa-2026
+      INFERENCIA_CONCORRENCIA_MAX: '4'
     volumes:
       - ./.env:/app/.env:ro
       - "./prompt inicial para avaliarmos dificuldade:/app/prompt-inicial.txt:ro"
       - ./data:/app/data:ro
-      - /root/gmx/google-oauth-client.json:/app/secrets/google-oauth-client.json:ro
-      - /root/gmx/.google-token.json:/app/secrets/.google-token.json:rw
+      - ../gmx/google-oauth-client.json:/app/secrets/google-oauth-client.json:ro
+      - ../gmx/.google-token.json:/app/secrets/.google-token.json:rw
 
 volumes:
+  iagmx_caddy_data:
+  iagmx_caddy_config:
   iagmx_pg_data:
   iagmx_redis_data:
   iagmx_qdrant_data:

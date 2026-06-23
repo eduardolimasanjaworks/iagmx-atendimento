@@ -19,6 +19,9 @@ export interface RespostaPendente {
   motivo: string;
   mensagensEntrada: number;
   origem?: 'evolution' | 'teste';
+  agendadoPara?: number;
+  fragmentar?: boolean;
+  tipoFila?: 'canal_indisponivel' | 'atraso_humanizado' | 'falha_envio';
 }
 
 export async function enfileirarResposta(
@@ -37,7 +40,9 @@ export async function enfileirarResposta(
   await redis.ltrim(`${PREFIXO}tel:${telefone}`, 0, 9);
   await redis.lpush(LISTA_GLOBAL, id);
   await redis.ltrim(LISTA_GLOBAL, 0, 49);
-  console.log(`[fila] Resposta pendente ${id} para ${telefone}: ${dados.motivo}`);
+  console.log(
+    `[fila] Resposta pendente ${id} para ${telefone}: ${dados.motivo}${dados.agendadoPara ? ` (agendada para ${new Date(dados.agendadoPara).toISOString()})` : ''}`,
+  );
   return id;
 }
 
@@ -90,6 +95,17 @@ export async function limparTodaFila(): Promise<number> {
     removidos++;
   }
   await redis.del(LISTA_GLOBAL);
+  return removidos;
+}
+
+export async function limparFilaPorTelefone(telefone: string): Promise<number> {
+  const tel = normalizarTelefone(telefone);
+  const ids = await redis.lrange(`${PREFIXO}tel:${tel}`, 0, -1);
+  let removidos = 0;
+  for (const id of ids) {
+    await removerRespostaPendente(id, tel);
+    removidos++;
+  }
   return removidos;
 }
 

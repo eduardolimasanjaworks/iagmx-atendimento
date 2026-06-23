@@ -28,6 +28,7 @@ const PRECOS_POR_1M: Record<string, { input: number; output: number }> = {
 };
 
 const FALLBACK_PROVEDOR: Record<string, { input: number; output: number }> = {
+  openrouter: { input: 3, output: 15 },
   claude: { input: 3, output: 15 },
   openai: { input: 2.5, output: 10 },
   groq: { input: 0.59, output: 0.79 },

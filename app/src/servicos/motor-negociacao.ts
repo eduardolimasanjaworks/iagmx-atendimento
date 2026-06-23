@@ -5,7 +5,15 @@
 import { buscarConfigRota } from './rotas-gmx.js';
 import { buscarMotoristaPorTelefone } from './motorista-gmx.js';
 import { listarEmbarquesAtivos } from './embarque-motorista.js';
-import type { OfertaGmX } from './ferramentas-contexto.js';
+
+interface OfertaNegociacao {
+  origem: string;
+  destino: string;
+  valor: number;
+  operacao?: string;
+  capacidade?: string;
+  configRotaId?: number | null;
+}
 
 export interface FaixaNegociacao {
   origem: string;
@@ -13,6 +21,7 @@ export interface FaixaNegociacao {
   valorOfertado: number;
   valorMinimo: number;
   valorMaximo: number;
+  configRotaId?: number | null;
   fonte: 'embarque' | 'config_rotas';
 }
 
@@ -53,8 +62,8 @@ function faixaValida(min: number, max: number): boolean {
 
 async function faixaDoEmbarqueAtivo(
   telefone: string,
-  oferta: OfertaGmX,
-): Promise<{ valorMinimo: number; valorMaximo: number } | null> {
+  oferta: OfertaNegociacao,
+): Promise<{ valorMinimo: number; valorMaximo: number; configRotaId?: number | null } | null> {
   const motorista = await buscarMotoristaPorTelefone(telefone);
   if (!motorista) return null;
 
@@ -66,7 +75,11 @@ async function faixaDoEmbarqueAtivo(
     const valorMinimo = Number(e.valor_minimo);
     const valorMaximo = Number(e.valor_maximo);
     if (faixaValida(valorMinimo, valorMaximo)) {
-      return { valorMinimo, valorMaximo };
+      return {
+        valorMinimo,
+        valorMaximo,
+        configRotaId: e.config_rota_id != null ? Number(e.config_rota_id) : null,
+      };
     }
   }
   return null;
@@ -77,7 +90,7 @@ async function faixaDoEmbarqueAtivo(
  * Retorna null se não houver rota configurada — IA não inventa piso/teto.
  */
 export async function obterFaixaNegociacao(
-  oferta: OfertaGmX,
+  oferta: OfertaNegociacao,
   telefone?: string,
 ): Promise<FaixaNegociacao | null> {
   if (telefone) {
@@ -89,14 +102,18 @@ export async function obterFaixaNegociacao(
         valorOfertado: oferta.valor,
         valorMinimo: emb.valorMinimo,
         valorMaximo: emb.valorMaximo,
+        configRotaId: emb.configRotaId ?? null,
         fonte: 'embarque',
       };
     }
   }
 
   const rota = await buscarConfigRota({
+    id: oferta.configRotaId,
     origem: oferta.origem,
     destino: oferta.destino,
+    operacao: oferta.operacao,
+    capacidade: oferta.capacidade,
   });
 
   if (rota) {
@@ -109,6 +126,7 @@ export async function obterFaixaNegociacao(
         valorOfertado: oferta.valor,
         valorMinimo,
         valorMaximo,
+        configRotaId: rota.id,
         fonte: 'config_rotas',
       };
     }

@@ -80,6 +80,7 @@ export async function rotasDiagnostico(app: FastifyInstance): Promise<void> {
           postgres,
           qdrant,
           evolution,
+          openrouter: tokens.openrouter,
           claude: tokens.claude,
           openai: tokens.openai,
           groq: tokens.groq,

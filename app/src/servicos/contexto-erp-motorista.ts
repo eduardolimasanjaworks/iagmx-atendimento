@@ -6,6 +6,7 @@ import { directusConfigurado, directusListar } from './directus.js';
 import { buscarMotoristaPorTelefone, STATUS_CONTATO_WHATSAPP, type MotoristaGmx } from './motorista-gmx.js';
 import { normalizarTelefone } from '../util/telefone.js';
 import { buscarConfigRota, formatarContextoRotaNegociacao } from './rotas-gmx.js';
+import { resumirHistoricoNominalOfertasPorEmbarque } from './historico-ofertas-gmx.js';
 
 const COLECOES_DOCS = [
   { colecao: 'cnh', label: 'CNH', campos: 'cpf,nome,validade,n_registro_cnh,categoria,link,date_updated' },
@@ -76,6 +77,7 @@ interface EmbarqueErp {
   valor_minimo?: number | string | null;
   valor_maximo?: number | string | null;
   rota_status?: string;
+  config_rota_id?: number | null;
   operacao?: string;
   produto?: string;
   pickup_date?: string;
@@ -135,7 +137,7 @@ async function obterDocumentosDetalhados(motoristaId: number): Promise<string[]>
 
 async function obterEmbarquesMotorista(motoristaId: number): Promise<EmbarqueErp[]> {
   const campos =
-    'id,status,origin,destination,total_value,valor_ofertado,valor_minimo,valor_maximo,rota_status,operacao,produto,pickup_date,oferta_disparada_em,driver_id,oferta_motorista_id,date_updated';
+    'id,status,origin,destination,total_value,valor_ofertado,valor_minimo,valor_maximo,rota_status,config_rota_id,operacao,produto,pickup_date,oferta_disparada_em,driver_id,oferta_motorista_id,date_updated';
   const [porDriver, porOferta] = await Promise.all([
     directusListar<EmbarqueErp>('embarques', {
       'filter[driver_id][_eq]': String(motoristaId),
@@ -260,6 +262,7 @@ async function formatarEmbarques(embarques: EmbarqueErp[]): Promise<string[]> {
     linhas.push(`  Rota: ${truncar(e.origin ?? '—', 60)} → ${truncar(e.destination ?? '—', 60)}`);
     if (valor != null) linhas.push(`  Valor: R$ ${valor}`);
     if (e.rota_status) linhas.push(`  Status oferta/rota: ${e.rota_status}`);
+    if (e.config_rota_id != null) linhas.push(`  Config rota ERP: #${e.config_rota_id}`);
     if (e.operacao) linhas.push(`  Operação: ${e.operacao}`);
     if (e.produto) linhas.push(`  Produto: ${truncar(String(e.produto), 50)}`);
     if (e.pickup_date) linhas.push(`  Carregamento: ${formatarDataBr(e.pickup_date)}`);
@@ -273,10 +276,44 @@ async function formatarEmbarques(embarques: EmbarqueErp[]): Promise<string[]> {
     linhas.push('  Documentos da viagem:');
     linhas.push(...docsViagem);
 
+    const historicoNominal = await resumirHistoricoNominalOfertasPorEmbarque(e.id).catch(() => null);
+    if (historicoNominal) {
+      linhas.push('  Retornos nominais de oferta:');
+      if (historicoNominal.recusas.length === 0) {
+        linhas.push('  Recusas: nenhuma registrada');
+      } else {
+        linhas.push(
+          `  Recusas: ${historicoNominal.recusas
+            .map((item) => item.motorista_nome || item.telefone || 'motorista sem nome')
+            .join('; ')}`,
+        );
+      }
+      if (historicoNominal.escalonamentos.length === 0) {
+        linhas.push('  Escalonamentos: nenhum registrado');
+      } else {
+        linhas.push(
+          `  Escalonamentos: ${historicoNominal.escalonamentos
+            .map((item) =>
+              `${item.motorista_nome || item.telefone || 'motorista sem nome'}${item.motivo ? ` (${item.motivo})` : ''}`,
+            )
+            .join('; ')}`,
+        );
+      }
+      if (historicoNominal.aceites.length > 0) {
+        linhas.push(
+          `  Aceites: ${historicoNominal.aceites
+            .map((item) => item.motorista_nome || item.telefone || 'motorista sem nome')
+            .join('; ')}`,
+        );
+      }
+    }
+
     if ((e.rota_status === 'ofertado' || e.oferta_motorista_id) && e.origin && e.destination) {
       const rota = await buscarConfigRota({
+        id: e.config_rota_id,
         origem: e.origin,
         destino: e.destination,
+        operacao: e.operacao,
       });
       if (rota && valor != null) {
         const neg = formatarContextoRotaNegociacao(rota, Number(valor));
@@ -370,12 +407,11 @@ async function appendMotorista(
   linhas.push('');
   linhas.push('DISPONIBILIDADE (último registro):');
   if (disp) {
-    const local =
-      (disp.localizacao_atual as string) ||
-      (disp.local_disponibilidade as string) ||
-      'não informada';
     linhas.push(`- disponível: ${disp.disponivel === true ? 'sim' : disp.disponivel === false ? 'não' : '—'}`);
-    linhas.push(`- local: ${local}`);
+    linhas.push(`- local atual: ${(disp.localizacao_atual as string) || 'não informada'}`);
+    if (disp.local_disponibilidade) {
+      linhas.push(`- local para carregar: ${disp.local_disponibilidade as string}`);
+    }
     if (disp.data_previsao_disponibilidade) {
       linhas.push(`- libera: ${formatarDataBr(disp.data_previsao_disponibilidade as string)}`);
     }

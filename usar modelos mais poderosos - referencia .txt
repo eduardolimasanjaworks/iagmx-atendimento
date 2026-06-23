@@ -1,0 +1,336 @@
+import json
+import os
+import urllib.error
+import urllib.request
+
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_GLM_MODEL = "z-ai/glm-5.2"
+DEFAULT_FABLE_MODEL = "anthropic/claude-fable-5"
+
+
+class OpenRouterDualAdapter:
+    def __init__(
+        self,
+        api_key=None,
+        glm_model=DEFAULT_GLM_MODEL,
+        fable_model=DEFAULT_FABLE_MODEL,
+        default_mode="ensemble",
+        arbiter="fable",
+        temperature=0.2,
+        max_tokens=1200,
+        app_name="dual-rag-adapter",
+        referer="https://localhost",
+    ):
+        self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
+        if not self.api_key:
+            raise ValueError(
+                "Defina OPENROUTER_API_KEY ou passe api_key ao criar o adapter."
+            )
+
+        self.glm_model = glm_model
+        self.fable_model = fable_model
+        self.default_mode = default_mode
+        self.arbiter = arbiter
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.app_name = app_name
+        self.referer = referer
+
+    def ask(
+        self,
+        user_prompt,
+        rag_context="",
+        system_prompt="",
+        mode=None,
+        arbiter=None,
+        max_tokens=None,
+        temperature=None,
+    ):
+        mode = mode or self.default_mode
+        arbiter = arbiter or self.arbiter
+        max_tokens = max_tokens or self.max_tokens
+        temperature = self._resolve_temperature(temperature)
+
+        if mode == "glm":
+            return self._single_result(
+                self.glm_model,
+                user_prompt,
+                rag_context,
+                system_prompt,
+                max_tokens,
+                temperature,
+            )
+
+        if mode == "fable":
+            return self._single_result(
+                self.fable_model,
+                user_prompt,
+                rag_context,
+                system_prompt,
+                max_tokens,
+                temperature,
+            )
+
+        if mode == "chain":
+            return self._chain_result(
+                user_prompt,
+                rag_context,
+                system_prompt,
+                max_tokens,
+                temperature,
+            )
+
+        if mode == "ensemble":
+            return self._ensemble_result(
+                user_prompt,
+                rag_context,
+                system_prompt,
+                max_tokens,
+                temperature,
+                arbiter,
+            )
+
+        raise ValueError("mode deve ser: glm, fable, chain ou ensemble")
+
+    def _resolve_temperature(self, temperature):
+        if temperature is None:
+            return self.temperature
+        return temperature
+
+    def _build_user_content(self, user_prompt, rag_context):
+        if rag_context:
+            return (
+                "Contexto recuperado do RAG:\n"
+                f"{rag_context}\n\n"
+                "Pergunta do usuario:\n"
+                f"{user_prompt}"
+            )
+        return user_prompt
+
+    def _base_messages(self, user_prompt, rag_context, system_prompt):
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append(
+            {
+                "role": "user",
+                "content": self._build_user_content(user_prompt, rag_context),
+            }
+        )
+        return messages
+
+    def _call_openrouter(self, model, messages, max_tokens, temperature):
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+
+        request = urllib.request.Request(
+            OPENROUTER_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": self.referer,
+                "X-Title": self.app_name,
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                body = response.read().decode("utf-8")
+                return json.loads(body)
+        except urllib.error.HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"Erro HTTP {exc.code} ao chamar {model}: {error_body}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                f"Erro de rede ao chamar {model}: {exc}"
+            ) from exc
+
+    def _extract_text(self, raw):
+        message = raw["choices"][0]["message"]
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(item.get("text", ""))
+            return "\n".join(part for part in parts if part)
+        return str(content)
+
+    def _single_result(
+        self,
+        model,
+        user_prompt,
+        rag_context,
+        system_prompt,
+        max_tokens,
+        temperature,
+    ):
+        raw = self._call_openrouter(
+            model,
+            self._base_messages(user_prompt, rag_context, system_prompt),
+            max_tokens,
+            temperature,
+        )
+        return {
+            "mode": "single",
+            "model": raw.get("model", model),
+            "answer": self._extract_text(raw),
+            "raw": raw,
+        }
+
+    def _chain_result(
+        self,
+        user_prompt,
+        rag_context,
+        system_prompt,
+        max_tokens,
+        temperature,
+    ):
+        glm_result = self._single_result(
+            self.glm_model,
+            user_prompt,
+            rag_context,
+            system_prompt,
+            max_tokens,
+            temperature,
+        )
+
+        review_system = (
+            "Voce eh um segundo modelo revisor. Analise o contexto do RAG, o "
+            "prompt do usuario e a resposta preliminar do primeiro modelo. "
+            "Corrija erros, remova exageros, preserve o que estiver correto e "
+            "entregue a melhor resposta final possivel."
+        )
+        review_user = (
+            "Contexto do RAG:\n"
+            f"{rag_context or '[sem contexto adicional]'}\n\n"
+            "Prompt do usuario:\n"
+            f"{user_prompt}\n\n"
+            "Resposta preliminar do GLM:\n"
+            f"{glm_result['answer']}\n\n"
+            "Tarefa:\n"
+            "1. Corrija o que estiver fraco ou errado.\n"
+            "2. Use o contexto do RAG quando ele for relevante.\n"
+            "3. Entregue a resposta final em portugues.\n"
+            "4. Se houver incerteza, diga isso explicitamente."
+        )
+        review_raw = self._call_openrouter(
+            self.fable_model,
+            [
+                {"role": "system", "content": review_system},
+                {"role": "user", "content": review_user},
+            ],
+            max_tokens,
+            temperature,
+        )
+
+        return {
+            "mode": "chain",
+            "glm": glm_result,
+            "final_model": review_raw.get("model", self.fable_model),
+            "answer": self._extract_text(review_raw),
+            "raw": {
+                "glm": glm_result["raw"],
+                "final": review_raw,
+            },
+        }
+
+    def _ensemble_result(
+        self,
+        user_prompt,
+        rag_context,
+        system_prompt,
+        max_tokens,
+        temperature,
+        arbiter,
+    ):
+        glm_result = self._single_result(
+            self.glm_model,
+            user_prompt,
+            rag_context,
+            system_prompt,
+            max_tokens,
+            temperature,
+        )
+        fable_result = self._single_result(
+            self.fable_model,
+            user_prompt,
+            rag_context,
+            system_prompt,
+            max_tokens,
+            temperature,
+        )
+
+        arbiter_model = self.glm_model if arbiter == "glm" else self.fable_model
+        arbiter_system = (
+            "Voce eh um arbitro tecnico cauteloso. Receba duas respostas para a "
+            "mesma pergunta. Sua meta eh maximizar assertividade, nao defender "
+            "nenhum modelo. Priorize convergencia, identifique conflitos e "
+            "admita incerteza quando necessario."
+        )
+        arbiter_user = (
+            "Contexto do RAG:\n"
+            f"{rag_context or '[sem contexto adicional]'}\n\n"
+            "Prompt do usuario:\n"
+            f"{user_prompt}\n\n"
+            "Resposta do GLM:\n"
+            f"{glm_result['answer']}\n\n"
+            "Resposta do Fable:\n"
+            f"{fable_result['answer']}\n\n"
+            "Tarefa:\n"
+            "1. Identifique os pontos em comum.\n"
+            "2. Identifique divergencias e pontos suspeitos.\n"
+            "3. Produza uma resposta final mais confiavel do que qualquer uma "
+            "isoladamente.\n"
+            "4. Se nao der para confirmar algo pelo contexto fornecido, diga isso.\n"
+            "5. Responda em portugues."
+        )
+        arbiter_raw = self._call_openrouter(
+            arbiter_model,
+            [
+                {"role": "system", "content": arbiter_system},
+                {"role": "user", "content": arbiter_user},
+            ],
+            max_tokens,
+            temperature,
+        )
+
+        return {
+            "mode": "ensemble",
+            "glm": glm_result,
+            "fable": fable_result,
+            "final_model": arbiter_raw.get("model", arbiter_model),
+            "answer": self._extract_text(arbiter_raw),
+            "raw": {
+                "glm": glm_result["raw"],
+                "fable": fable_result["raw"],
+                "final": arbiter_raw,
+            },
+        }
+
+
+if __name__ == "__main__":
+    adapter = OpenRouterDualAdapter()
+
+    result = adapter.ask(
+        user_prompt="Explique como trocar Claude por GLM e Fable em um RAG existente.",
+        rag_context="O sistema atual ja usa recuperacao de contexto e so precisa trocar a camada de inferencia.",
+        system_prompt=(
+            "Voce responde como um arquiteto de integracao. Seja pratico e objetivo."
+        ),
+        mode="ensemble",
+        arbiter="fable",
+    )
+
+    print(result["answer"])

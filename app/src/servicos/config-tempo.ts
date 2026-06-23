@@ -13,7 +13,7 @@ export interface ConfigTempo {
 }
 
 export const TEMPO_PADRAO: ConfigTempo = {
-  debounceMs: 800,
+  debounceMs: 2200,
   debounceWorkerMs: 300,
 };
 
@@ -24,7 +24,7 @@ const CACHE_TTL_MS = 3000;
 function normalizar(partial: Partial<ConfigTempo>): ConfigTempo {
   const base = { ...TEMPO_PADRAO, ...partial };
   return {
-    debounceMs: Math.max(300, Math.min(5000, Math.floor(base.debounceMs))),
+    debounceMs: Math.max(1500, Math.min(8000, Math.floor(base.debounceMs))),
     debounceWorkerMs: Math.max(100, Math.min(2000, Math.floor(base.debounceWorkerMs))),
   };
 }

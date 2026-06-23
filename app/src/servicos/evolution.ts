@@ -70,7 +70,7 @@ export async function enviarRespostaFragmentada(
   instance: string,
   numero: string,
   textoCompleto: string,
-  opts?: { fragmentar?: boolean },
+  opts?: { fragmentar?: boolean; ignorarAtrasoInicial?: boolean; ignorarDigitando?: boolean },
 ): Promise<number> {
   return enviarFragmentosHumanizado(instance, numero, textoCompleto, opts);
 }

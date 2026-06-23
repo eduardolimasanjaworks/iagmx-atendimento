@@ -173,3 +173,28 @@ export async function obterTrace(id: string): Promise<TracePipeline | null> {
   const raw = await redis.get(chave(id));
   return raw ? (JSON.parse(raw) as TracePipeline) : null;
 }
+
+export async function limparTracesContato(remoteJid: string): Promise<number> {
+  const ids = await redis.lrange(LISTA, 0, -1);
+  const manter: string[] = [];
+  let removidos = 0;
+
+  for (const id of ids) {
+    const raw = await redis.get(chave(id));
+    if (!raw) continue;
+    const trace = JSON.parse(raw) as TracePipeline;
+    if (trace.remoteJid === remoteJid) {
+      await redis.del(chave(id));
+      removidos++;
+      continue;
+    }
+    manter.push(id);
+  }
+
+  await redis.del(LISTA);
+  for (const id of manter.reverse()) {
+    await redis.lpush(LISTA, id);
+  }
+  await redis.del(`pipeline:ativo:${remoteJid}`);
+  return removidos;
+}

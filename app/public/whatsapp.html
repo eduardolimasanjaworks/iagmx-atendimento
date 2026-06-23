@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Conectar WhatsApp — IA GMX</title>
+  <title>Conectar numero da i.a - GMX</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --muted: #94a3b8;
-      --text: #e2e8f0;
-      --green: #25d366;
-      --green-dim: rgba(37, 211, 102, 0.12);
-      --border: #334155;
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --muted: #62748b;
+      --text: #132033;
+      --green: #16a34a;
+      --green-dim: rgba(22, 163, 74, 0.08);
+      --border: #d7e0ee;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -31,7 +32,7 @@
       background: var(--card);
       border-radius: 22px;
       border: 1px solid var(--border);
-      box-shadow: 0 8px 32px rgba(0,0,0,.35);
+      box-shadow: 0 12px 30px rgba(15,23,42,.08);
       overflow: hidden;
     }
     .header {
@@ -109,11 +110,11 @@
       font-weight: 500;
       cursor: pointer;
       border: 1px solid var(--border);
-      background: var(--card);
+      background: #f8fbff;
       color: var(--text);
       transition: background .15s;
     }
-    button:hover { background: #334155; }
+    button:hover { background: #eef3fb; }
     button.primary {
       background: var(--green);
       border-color: var(--green);
@@ -133,7 +134,41 @@
       text-align: center;
     }
     .status-text.ok { color: var(--green); font-weight: 600; }
-    .status-text.erro { color: #f87171; }
+    .status-text.erro { color: #dc2626; }
+    .cooldown-box {
+      width: 100%;
+      background: #f8fbff;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      padding: .85rem;
+      display: none;
+      gap: .5rem;
+      flex-direction: column;
+    }
+    .cooldown-box.visible { display: flex; }
+    .cooldown-title {
+      font-size: .875rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .cooldown-copy {
+      font-size: .8125rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .cooldown-track {
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(148, 163, 184, .18);
+    }
+    .cooldown-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #25d366, #86efac);
+      transition: width .25s ease;
+    }
     .passos h2 {
       font-size: .875rem;
       font-weight: 600;
@@ -150,7 +185,8 @@
       width: 28px;
       height: 28px;
       border-radius: 50%;
-      background: #334155;
+      background: #dbeafe;
+      color: #1d4ed8;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -165,13 +201,13 @@
       padding: .75rem 1.25rem 0;
       font-size: .8125rem;
     }
-    .top-links a { color: var(--green); text-decoration: none; }
+    .top-links a { color: #2563eb; text-decoration: none; }
     .badge {
       display: inline-block;
       padding: .2rem .6rem;
       border-radius: 999px;
       font-size: .75rem;
-      background: #334155;
+      background: #eef3fb;
       color: var(--muted);
       margin-top: .5rem;
     }
@@ -182,11 +218,11 @@
 <body>
   <div class="card">
     <div class="top-links">
-      <a href="/">← Painel de prompt</a>
+      <a href="/">← Painel da i.a</a>
       <a href="/health" target="_blank">Status</a>
     </div>
     <div class="header">
-      <h1>Conectar WhatsApp</h1>
+      <h1>Conectar numero da i.a</h1>
       <p>Escaneie o QR code com o celular para ativar a IA de atendimento</p>
       <span id="badge" class="badge">verificando...</span>
     </div>
@@ -198,10 +234,17 @@
           <img id="qrImg" alt="QR Code WhatsApp" hidden />
         </div>
         <div class="acoes">
-          <button type="button" id="btnAtualizar">↻ Atualizar QR</button>
-          <button type="button" id="btnReconectar">Reconectar</button>
+          <button type="button" id="btnAtualizar">Verificar agora se conectou</button>
+          <button type="button" id="btnReconectar">Desconectar e gerar novo QR</button>
         </div>
         <p class="status-text" id="statusText">Aguardando...</p>
+        <div class="cooldown-box" id="cooldownBox">
+          <div class="cooldown-title" id="cooldownTitle">Calma, estou cuidando disso por aqui.</div>
+          <div class="cooldown-copy" id="cooldownCopy"></div>
+          <div class="cooldown-track">
+            <div class="cooldown-bar" id="cooldownBar"></div>
+          </div>
+        </div>
       </div>
 
       <div class="passos">
@@ -220,10 +263,11 @@
         </div>
       </div>
 
-      <button type="button" class="primary" id="btnGerar">Gerar QR Code</button>
+      <button type="button" class="primary" id="btnGerar">Abrir QR da conexao atual</button>
     </div>
   </div>
 
+  <script src="/painel-auth.js"></script>
   <script>
     const qrImg = document.getElementById('qrImg');
     const qrPlaceholder = document.getElementById('qrPlaceholder');
@@ -232,9 +276,85 @@
     const btnGerar = document.getElementById('btnGerar');
     const btnAtualizar = document.getElementById('btnAtualizar');
     const btnReconectar = document.getElementById('btnReconectar');
+    const cooldownBox = document.getElementById('cooldownBox');
+    const cooldownTitle = document.getElementById('cooldownTitle');
+    const cooldownCopy = document.getElementById('cooldownCopy');
+    const cooldownBar = document.getElementById('cooldownBar');
 
     let pollTimer = null;
     let conectado = false;
+    const cooldownMs = {
+      atualizar: 3000,
+      qr: 8000,
+      reconectar: 15000,
+    };
+    const cooldownAte = {
+      atualizar: 0,
+      qr: 0,
+      reconectar: 0,
+    };
+    let cooldownTimer = null;
+
+    function segundosRestantes(acao) {
+      return Math.max(0, Math.ceil((cooldownAte[acao] - Date.now()) / 1000));
+    }
+
+    function iniciarCooldown(acao, ateIso, fallbackMs) {
+      const alvo = ateIso ? new Date(ateIso).getTime() : Date.now() + (fallbackMs || 0);
+      if (!Number.isFinite(alvo)) return;
+      cooldownAte[acao] = Math.max(cooldownAte[acao] || 0, alvo);
+      atualizarAcoes();
+      if (cooldownTimer) return;
+      cooldownTimer = setInterval(() => {
+        atualizarAcoes();
+        if (Object.values(cooldownAte).every((valor) => valor <= Date.now())) {
+          clearInterval(cooldownTimer);
+          cooldownTimer = null;
+        }
+      }, 1000);
+    }
+
+    function atualizarAcoes() {
+      const restanteAtualizar = segundosRestantes('atualizar');
+      const restanteQr = segundosRestantes('qr');
+      const restanteReconectar = segundosRestantes('reconectar');
+
+      btnAtualizar.textContent = restanteAtualizar > 0 ? `Ja ja eu confiro de novo (${restanteAtualizar}s)` : 'Verificar agora se conectou';
+      btnGerar.textContent = restanteQr > 0 ? `Seguro mais um instante (${restanteQr}s)` : 'Abrir QR da conexao atual';
+      btnReconectar.textContent = restanteReconectar > 0 ? `Calma, vou reiniciar em ${restanteReconectar}s` : 'Desconectar e gerar novo QR';
+
+      if (!btnAtualizar.dataset.loading) btnAtualizar.disabled = restanteAtualizar > 0;
+      if (!btnGerar.dataset.loading) btnGerar.disabled = restanteQr > 0;
+      if (!btnReconectar.dataset.loading) btnReconectar.disabled = restanteReconectar > 0;
+
+      const acaoAtiva =
+        restanteReconectar > 0 ? 'reconectar' :
+        restanteQr > 0 ? 'qr' :
+        restanteAtualizar > 0 ? 'atualizar' :
+        null;
+
+      if (!acaoAtiva) {
+        cooldownBox.classList.remove('visible');
+        cooldownBar.style.width = '0%';
+        return;
+      }
+
+      const restante = segundosRestantes(acaoAtiva);
+      const total = cooldownMs[acaoAtiva];
+      const restanteMs = Math.max(0, cooldownAte[acaoAtiva] - Date.now());
+      const progresso = Math.max(6, Math.min(100, ((total - restanteMs) / total) * 100));
+
+      cooldownBox.classList.add('visible');
+      cooldownTitle.textContent = 'Calma, estou cuidando disso por aqui.';
+      if (acaoAtiva === 'atualizar') {
+        cooldownCopy.textContent = `Estou esperando ${restante}s para consultar de novo sem ficar batendo na conexao toda hora.`;
+      } else if (acaoAtiva === 'qr') {
+        cooldownCopy.textContent = `Estou segurando ${restante}s antes de pedir outro QR, para nao fazer spam na instancia.`;
+      } else {
+        cooldownCopy.textContent = `Estou segurando ${restante}s antes de reiniciar tudo, para proteger a sessao e evitar instabilidade.`;
+      }
+      cooldownBar.style.width = `${progresso}%`;
+    }
 
     function mostrarQr(base64) {
       if (!base64) return;
@@ -279,11 +399,12 @@
       try {
         const res = await fetch('/api/whatsapp/status');
         const data = await res.json();
+        if (data.cooldownAte) iniciarCooldown('atualizar', data.cooldownAte, data.cooldownMs || cooldownMs.atualizar);
         conectado = data.conectado;
         atualizarBadge(data.state, data.conectado);
 
         if (data.conectado) {
-          setOk('WhatsApp conectado! A IA já pode responder mensagens');
+          setOk('Pronto, confirmei por aqui: o numero ja esta conectado e pode responder.');
           qrImg.hidden = true;
           qrPlaceholder.hidden = false;
           qrPlaceholder.textContent = '✓ Conectado com sucesso';
@@ -293,7 +414,7 @@
         if (data.motivoDesconexao) {
           setErro(data.motivoDesconexao);
         } else if (data.state === 'connecting') {
-          setLoading('Aguardando leitura do QR code — escaneie abaixo');
+          setLoading('Estou aguardando a leitura do QR. Assim que conectar, eu te mostro aqui.');
         }
         return false;
       } catch {
@@ -302,7 +423,13 @@
     }
 
     async function carregarQr() {
-      setLoading('Gerando QR code...');
+      if (segundosRestantes('qr') > 0) {
+        setLoading(`So mais ${segundosRestantes('qr')}s e eu libero um novo QR para voce.`);
+        return;
+      }
+      setLoading('Estou preparando o QR code para voce...');
+      btnGerar.dataset.loading = '1';
+      btnAtualizar.dataset.loading = '1';
       btnGerar.disabled = true;
       btnAtualizar.disabled = true;
       try {
@@ -311,39 +438,48 @@
 
         const res = await fetch('/api/whatsapp/qrcode');
         const data = await res.json();
+        if (data.cooldownAte) iniciarCooldown('qr', data.cooldownAte, data.cooldownMs || cooldownMs.qr);
         if (!res.ok) throw new Error(data.erro || 'Falha ao obter QR');
 
         if (data.conectado) {
-          setOk('WhatsApp já está conectado');
+          setOk('Esse numero ja aparece como conectado por aqui.');
           return;
         }
 
         mostrarQr(data.base64);
-        setLoading('Aguardando leitura do QR...');
+        setLoading('QR pronto. Pode escanear que eu fico acompanhando daqui.');
         iniciarPoll();
       } catch (e) {
         setErro(e.message || 'Erro ao gerar QR');
       } finally {
-        btnGerar.disabled = false;
-        btnAtualizar.disabled = false;
+        delete btnGerar.dataset.loading;
+        delete btnAtualizar.dataset.loading;
+        atualizarAcoes();
       }
     }
 
     async function reconectar() {
-      setLoading('Reconectando...');
+      if (segundosRestantes('reconectar') > 0) {
+        setLoading(`So mais ${segundosRestantes('reconectar')}s e eu deixo reiniciar a conexao com seguranca.`);
+        return;
+      }
+      setLoading('Estou reiniciando a conexao e preparando um QR novo...');
+      btnReconectar.dataset.loading = '1';
       btnReconectar.disabled = true;
       try {
         const res = await fetch('/api/whatsapp/reconectar', { method: 'POST' });
         const data = await res.json();
+        if (data.cooldownAte) iniciarCooldown('reconectar', data.cooldownAte, data.cooldownMs || cooldownMs.reconectar);
         if (!res.ok) throw new Error(data.erro || 'Falha ao reconectar');
         mostrarQr(data.base64);
-        setLoading('Novo QR gerado — escaneie no celular');
+        setLoading('Pronto. QR novo gerado, pode escanear no celular.');
         conectado = false;
         iniciarPoll();
       } catch (e) {
         setErro(e.message || 'Erro ao reconectar');
       } finally {
-        btnReconectar.disabled = false;
+        delete btnReconectar.dataset.loading;
+        atualizarAcoes();
       }
     }
 
@@ -365,11 +501,20 @@
     }
 
     btnGerar.addEventListener('click', carregarQr);
-    btnAtualizar.addEventListener('click', carregarQr);
+    btnAtualizar.addEventListener('click', verificarStatus);
     btnReconectar.addEventListener('click', reconectar);
+    atualizarAcoes();
 
-    verificarStatus().then((ok) => {
-      if (!ok) carregarQr();
+    IagmxPainelAuth.boot({
+      requiredBlock: 'conexao_numero_ia',
+      onReady(contexto) {
+        if (contexto.usuario?.perfil !== 'admin') {
+          btnReconectar.hidden = true;
+        }
+        verificarStatus().then((ok) => {
+          if (!ok) carregarQr();
+        });
+      },
     });
   </script>
 </body>

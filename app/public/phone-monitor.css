@@ -1,0 +1,115 @@
+/**
+ * Complementos do monitor multi-contato da tela /phone.
+ * Separa estilos de selecao e filtros para manter o CSS base menor e modular.
+ * Mantem o foco em leitura clara e acoes simples por contato.
+ */
+.toolbar {
+  grid-template-columns: minmax(220px, 320px) auto auto auto 1fr;
+}
+
+.table-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.selection-card {
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .7rem;
+  padding: 1rem;
+}
+
+.empty-inline {
+  color: var(--muted);
+  font-size: .88rem;
+}
+
+.chip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  padding: .25rem;
+}
+
+.chip-item.active {
+  border-color: #93c5fd;
+  background: var(--accent-soft);
+}
+
+.chip-main,
+.chip-remove {
+  border: 0;
+  border-radius: 999px;
+  padding: .4rem .7rem;
+}
+
+.chip-main {
+  background: transparent;
+  color: var(--text);
+}
+
+.chip-item.active .chip-main {
+  color: var(--accent);
+}
+
+.chip-remove {
+  min-width: 2rem;
+  background: #eef2ff;
+  color: var(--muted);
+}
+
+.table-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.row-cliente td:first-child,
+.row-empresa td:first-child {
+  border-left: 3px solid transparent;
+}
+
+.row-cliente td:first-child {
+  border-left-color: #0ea5e9;
+}
+
+.row-ia td:first-child {
+  border-left: 3px solid #22c55e;
+}
+
+.row-sistema td:first-child {
+  border-left: 3px solid #f59e0b;
+}
+
+.row-empresa td:first-child {
+  border-left-color: #8b5cf6;
+}
+
+@media (max-width: 1080px) {
+  .toolbar,
+  .table-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .toolbar,
+  .table-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .chip-list {
+    padding-top: .85rem;
+  }
+}

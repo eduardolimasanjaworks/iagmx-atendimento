@@ -12,6 +12,8 @@ import {
 import { normalizarTelefone } from '../util/telefone.js';
 import type { MidiaCacheada } from './midia-cache.js';
 import { espelharMidiaWhatsappNoDrive } from './google-drive-motorista.js';
+import { resolverMapeamentoOcr } from './config-ocr-documentos.js';
+import { registrarOcrPendenteGmx } from './ocr-pendencias-gmx.js';
 
 /** Primeiro toque no WhatsApp — ainda não comprovou ser motorista */
 export const STATUS_CONTATO_WHATSAPP = 'CONTATO WHATSAPP';
@@ -41,6 +43,13 @@ function variantesTelefone(telefone: string): string[] {
   if (n.startsWith('55') && n.length >= 12) set.add(n.slice(2));
   if (!n.startsWith('55') && n.length >= 10) set.add(`55${n}`);
   return [...set];
+}
+
+function separarCidadeUf(local: string | undefined): { cidade?: string; estado?: string } {
+  const t = String(local ?? '').replace(/\s+/g, ' ').trim();
+  const m = t.match(/^(.*)\s+([A-Z]{2})$/);
+  if (!m) return {};
+  return { cidade: m[1].trim(), estado: m[2].trim() };
 }
 
 /** Busca motorista pelo telefone no cadastro GMX */
@@ -110,12 +119,10 @@ export async function criarContatoWhatsApp(
   nome?: string,
 ): Promise<MotoristaGmx> {
   const tel = normalizarTelefone(telefone);
-  const hoje = new Date().toISOString().slice(0, 10);
   return directusPost<MotoristaGmx>('cadastro_motorista', {
     telefone: tel,
     nome: nome ?? 'Contato',
     status_cadastro: STATUS_CONTATO_WHATSAPP,
-    observacao: `Primeiro contato via WhatsApp em ${hoje}`,
   });
 }
 
@@ -148,6 +155,7 @@ export async function registrarDisponibilidade(dados: {
   disponivel?: boolean;
   status?: string;
   localizacao_atual?: string;
+  local_disponibilidade?: string;
   latitude?: number;
   longitude?: number;
   data_previsao_disponibilidade?: string;
@@ -173,11 +181,11 @@ export async function registrarDisponibilidade(dados: {
     disponivel: dados.disponivel ?? statusErp === 'disponivel',
     status: statusErp,
     localizacao_atual: dados.localizacao_atual,
-    local_disponibilidade: dados.localizacao_atual,
+    local_disponibilidade: dados.local_disponibilidade ?? dados.localizacao_atual,
     latitude: dados.latitude,
     longitude: dados.longitude,
     data_previsao_disponibilidade: dados.data_previsao_disponibilidade,
-    observacao: dados.observacao ?? statusErp,
+    ...(dados.observacao ? { observacao: dados.observacao } : {}),
   };
 
   let registro: Record<string, unknown>;
@@ -191,8 +199,13 @@ export async function registrarDisponibilidade(dados: {
   }
 
   console.log(
-    `[erp-disponibilidade] gravado motorista_id=${motorista.id} status=${statusErp} local=${dados.localizacao_atual ?? '—'}`,
+    `[erp-disponibilidade] gravado motorista_id=${motorista.id} status=${statusErp} atual=${dados.localizacao_atual ?? '—'} libera_em=${dados.local_disponibilidade ?? '—'}`,
   );
+
+  const patchLocal = separarCidadeUf(dados.localizacao_atual);
+  if (patchLocal.cidade && patchLocal.estado) {
+    await atualizarMotorista(motorista.id, patchLocal).catch(() => undefined);
+  }
   return registro;
 }
 
@@ -216,6 +229,7 @@ export async function verificarDisponibilidadeNoErp(
   esperado: {
     disponivel?: boolean;
     localizacao_atual?: string;
+    local_disponibilidade?: string;
     status?: string;
   },
 ): Promise<{ ok: boolean; registro?: Record<string, unknown>; motivo?: string }> {
@@ -255,10 +269,25 @@ export async function verificarDisponibilidadeNoErp(
     }
   }
 
+  if (esperado.local_disponibilidade) {
+    const locErp = String(registro.local_disponibilidade ?? '').toLowerCase();
+    const locEsp = esperado.local_disponibilidade.toLowerCase();
+    const cidadeEsp = locEsp.split(/\s+/)[0];
+    if (cidadeEsp.length > 2 && !locErp.includes(cidadeEsp)) {
+      return {
+        ok: false,
+        registro,
+        motivo: `local_disponibilidade ERP="${locErp}" não contém "${cidadeEsp}"`,
+      };
+    }
+  }
+
   return { ok: true, registro };
 }
 
 type TipoDocumento = 'cnh' | 'crlv' | 'antt' | 'endereco' | 'comprovante' | 'foto' | 'outro';
+
+const TIPOS_COM_SUGESTAO_PENDENTE = new Set<string>(['cnh', 'crlv', 'antt', 'endereco', 'comprovante']);
 
 const MAPA_COLECAO: Record<string, string> = {
   cnh: 'cnh',
@@ -280,11 +309,34 @@ export async function gravarDocumentoMotorista(opts: {
   tipo?: TipoDocumento | string;
   textoExtraido?: string;
   campos?: Record<string, unknown>;
-}): Promise<{ fileId: string; fileUrl: string; colecao: string; registroId: unknown }> {
+}): Promise<{
+  fileId: string;
+  fileUrl: string;
+  colecao: string;
+  registroId: unknown;
+  pendente?: boolean;
+  arquivoOriginalId?: unknown;
+  sugestaoId?: unknown;
+}> {
   const motorista = await garantirMotorista(opts.telefone);
   const tel = normalizarTelefone(opts.telefone);
   const tipo = (opts.tipo ?? 'outro').toLowerCase() as TipoDocumento;
-  const colecao = MAPA_COLECAO[tipo] ?? 'cnh';
+  const mapeado = await resolverMapeamentoOcr(tipo, opts.campos, opts.textoExtraido);
+  const colecao = mapeado.colecao ?? MAPA_COLECAO[tipo] ?? 'cnh';
+
+  if (TIPOS_COM_SUGESTAO_PENDENTE.has(tipo)) {
+    return registrarOcrPendenteGmx({
+      motoristaId: motorista.id,
+      telefone: tel,
+      tipoDocumento: tipo,
+      colecaoDestino: colecao,
+      midia: opts.midia,
+      textoExtraido: opts.textoExtraido,
+      camposExtraidos: opts.campos,
+      sugestaoDocumento: mapeado.documento,
+      sugestaoMotorista: mapeado.motorista,
+    });
+  }
 
   const fileId = await directusUploadArquivo(
     opts.midia.buffer,
@@ -297,7 +349,7 @@ export async function gravarDocumentoMotorista(opts: {
     motorista_id: motorista.id,
     telefone: tel,
     link: fileUrl,
-    ...opts.campos,
+    ...(mapeado.documento || opts.campos || {}),
   };
 
   if (opts.textoExtraido) {
@@ -323,13 +375,13 @@ export async function gravarDocumentoMotorista(opts: {
     registro = (await directusPost(colecao, base)) as Record<string, unknown>;
   }
 
+  const patchMotorista: Record<string, unknown> = { ...mapeado.motorista };
   if (colecao === 'cnh') {
-    const patchMotorista: Record<string, unknown> = {};
-    if (base.cpf) patchMotorista.cpf = base.cpf;
-    if (base.nome && typeof base.nome === 'string') patchMotorista.nome = base.nome;
-    if (Object.keys(patchMotorista).length > 0) {
-      await atualizarMotorista(motorista.id, patchMotorista).catch(() => undefined);
-    }
+    if (base.cpf && !patchMotorista.cpf) patchMotorista.cpf = base.cpf;
+    if (base.nome && typeof base.nome === 'string' && !patchMotorista.nome) patchMotorista.nome = base.nome;
+  }
+  if (Object.keys(patchMotorista).length > 0) {
+    await atualizarMotorista(motorista.id, patchMotorista).catch(() => undefined);
   }
 
   espelharMidiaWhatsappNoDrive({
@@ -339,6 +391,31 @@ export async function gravarDocumentoMotorista(opts: {
   });
 
   return { fileId, fileUrl, colecao, registroId: registro.id };
+}
+
+export async function verificarDocumentoMotoristaNoErp(opts: {
+  telefone: string;
+  colecao: string;
+  fileUrl?: string;
+}): Promise<{ ok: boolean; registro?: Record<string, unknown>; motivo?: string }> {
+  const motorista = await buscarMotoristaPorTelefone(opts.telefone);
+  if (!motorista) {
+    return { ok: false, motivo: 'motorista não encontrado' };
+  }
+  const lista = await directusListar<Record<string, unknown>>(opts.colecao, {
+    'filter[motorista_id][_eq]': String(motorista.id),
+    sort: '-date_updated,-date_created',
+    limit: '3',
+    fields: 'id,link,motorista_id,date_updated,date_created',
+  }).catch(() => []);
+  const registro = lista.find((item) => {
+    if (!opts.fileUrl) return true;
+    return String(item.link ?? '') === opts.fileUrl;
+  });
+  if (!registro) {
+    return { ok: false, motivo: `documento não encontrado em ${opts.colecao}` };
+  }
+  return { ok: true, registro };
 }
 
 const COLECAO_CARRETA: Record<1 | 2 | 3, string> = {
@@ -425,12 +502,15 @@ export async function obterContextoMotoristaCompleto(
 /** Registra aceite/recusa/negociação de oferta no histórico do ERP */
 export async function registrarRespostaOfertaCarga(dados: {
   telefone: string;
+  event_id?: string;
   aceite: boolean;
   valor_aceito?: number;
   valor_ofertado?: number;
   origem?: string;
   destino?: string;
   observacao?: string;
+  embarque_id?: number | string;
+  motorista_id?: number | string;
   match_id?: number | null;
 }): Promise<Record<string, unknown>> {
   await garantirMotorista(dados.telefone);
@@ -450,9 +530,12 @@ export async function registrarRespostaOfertaCarga(dados: {
   }
 
   const descricao = JSON.stringify({
+    evento_id: dados.event_id ?? null,
     fonte: 'iagmx_ia',
     subtipo,
     telefone: normalizarTelefone(dados.telefone),
+    embarque_id: dados.embarque_id ?? null,
+    motorista_id: dados.motorista_id ?? null,
     aceite: dados.aceite,
     valor_aceito: dados.valor_aceito ?? null,
     valor_ofertado: dados.valor_ofertado ?? null,

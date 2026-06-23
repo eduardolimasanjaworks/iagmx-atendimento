@@ -2,8 +2,6 @@
  * Inferência com cadeia de pensamento invisível: planejar → analisar → rascunho (JSON) → revisar (JSON) → auditar.
  * Passada 1 usa prompt completo; passadas 2–3 usam contexto compacto (menos TPM).
  */
-import { CAMADA_HUMANA } from './camada-humana.js';
-import { config } from '../config.js';
 import {
   extrairRespostaMotorista,
   INSTRUCAO_RASCUNHO_COM_RACIOCINIO,
@@ -13,6 +11,7 @@ import {
 } from './cadeia-pensamento.js';
 import { extrairBlocosFerramenta, instrucoesFerramentas, mesclarFerramentasPreservadas } from './ferramentas.js';
 import { anexarFerramentasProgramaticas } from './ferramentas-contexto.js';
+import { montarCabecalhoOrquestracao } from './config-orquestracao-texto.js';
 import {
   analisarIntencaoMotorista,
   auditarRespostaEFerramentas,
@@ -70,10 +69,10 @@ function numeroDoCenario(cenario: string): number | null {
 }
 
 /** Extrai só o bloco do cenário escolhido + camadas fixas (passadas 2–3). */
-export function montarPromptCompactoPassadas(
+export async function montarPromptCompactoPassadas(
   promptCompleto: string,
   plano: PlanoResposta,
-): string {
+): Promise<string> {
   const n = numeroDoCenario(plano.cenario);
   let trechoCenario = '';
   if (n !== null) {
@@ -84,8 +83,9 @@ export function montarPromptCompactoPassadas(
     trechoCenario = promptCompleto.slice(0, 2200);
   }
 
-  return `${CAMADA_HUMANA}
-${config.instrucaoFormatacao}
+  const cabecalhoOrquestracao = await montarCabecalhoOrquestracao();
+
+  return `${cabecalhoOrquestracao}
 ${instrucoesFerramentas()}
 
 === CENÁRIO ATIVO (planejado: ${plano.cenario}) ===
@@ -101,7 +101,7 @@ async function planejar(
   historico: Array<{ role: string; content: string }>,
 ): Promise<PlanoResposta> {
   const hist = historico
-    .slice(-8)
+    .slice(-12)
     .map((h) => `${h.role}: ${h.content}`)
     .join('\n');
 
@@ -238,7 +238,7 @@ async function gerarRespostaRefinadaInterno(
     `passo1b-analise:${analise.intencao_provavel}:${analise.ambiguo ? 'ambiguo' : 'claro'}`,
   );
 
-  const promptCompacto = `${montarPromptCompactoPassadas(promptSistema, plano)}\n\n${blocoApoio}`;
+  const promptCompacto = `${await montarPromptCompactoPassadas(promptSistema, plano)}\n\n${blocoApoio}`;
   const instrucaoAnalise = montarInstrucaoAnaliseNoRascunho(analise);
 
   const rascunhoResult = await rascunhar(

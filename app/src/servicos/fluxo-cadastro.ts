@@ -4,37 +4,13 @@
 import type { ItemDebounce } from '../tipos/evolution.js';
 import { serializarBlocoFerramenta } from './ferramentas.js';
 import { limparEstadoFluxo, obterEstadoFluxo, salvarEstadoFluxo } from './estado-fluxo-redis.js';
-import {
-  MSG_OCR_ESCALONAR,
-  MSG_OCR_ILEGIVEL,
-  textoOcrValido,
-} from '../util/ocr-qualidade.js';
+import { textoOcrValido } from '../util/ocr-qualidade.js';
+import { obterConfigMensagensFluxo } from './config-mensagens-fluxo.js';
 
 export type PassoCadastro = 'cnh' | 'crlv' | 'antt' | 'endereco' | 'caminhao';
 
 const ENTRADA_CADASTRO =
   /^(cadastro|quero\s+(?:atualizar|atualiz)\w*\s+(?:o\s+)?(?:meu\s+)?cadastro|quero\s+cadastr|quero\s+me\s+cadastr|preciso\s+(?:atualizar\s+)?cadastr|fazer\s+cadastro|atualizar\s+(?:o\s+)?(?:meu\s+)?cadastro)/i;
-
-const INICIO =
-  'Beleza parceiro, vamos fazer seu cadastro, manda a foto da sua CNH por favor';
-
-const FECHAMENTO =
-  'Show parceiro, cadastro enviado pra análise da equipe, em breve te retornamos';
-
-const REPROMPT: Record<PassoCadastro, string> = {
-  cnh: 'Preciso da foto da CNH parceiro, manda aí por favor',
-  crlv: 'Preciso da foto do CRLV do cavalo parceiro, manda aí por favor',
-  antt: 'Preciso da foto ou PDF da ANTT parceiro, manda aí por favor',
-  endereco: 'Preciso do comprovante de endereço parceiro, manda a foto ou PDF',
-  caminhao: 'Preciso de uma foto do caminhão (cavalo) parceiro, manda aí por favor',
-};
-
-const CONFIRMACAO: Record<Exclude<PassoCadastro, 'caminhao'>, string> = {
-  cnh: 'CNH recebida parceiro, agora manda a foto do CRLV do cavalo',
-  crlv: 'Show parceiro, agora manda a foto ou PDF da ANTT',
-  antt: 'Beleza, agora manda o comprovante de endereço parceiro',
-  endereco: 'Recebido parceiro, agora manda uma foto do caminhão (cavalo)',
-};
 
 const TIPO_OCR: Record<PassoCadastro, string> = {
   cnh: 'cnh',
@@ -127,7 +103,6 @@ function montarResultado(
 }
 
 function inferirPasso(
-  historico: Array<{ role: string; content: string }>,
   ultimaAssist: string,
   mensagem: string,
   estado: EstadoC8 | null,
@@ -169,16 +144,17 @@ export async function tentarFluxoCadastro(opts: {
   itens?: ItemDebounce[];
 }): Promise<ResultadoFluxoCadastro | null> {
   const { telefone, mensagem, historico, itens = [] } = opts;
+  const msgs = await obterConfigMensagensFluxo();
   const ultimaAssist = ultimaAssistant(historico);
   const estado = await obterEstadoFluxo<EstadoC8>(telefone);
-  const passoAtual = inferirPasso(historico, ultimaAssist, mensagem, estado);
+  const passoAtual = inferirPasso(ultimaAssist, mensagem, estado);
 
   if (!passoAtual) return null;
 
   if (passoAtual === 'entrada') {
     await salvarEstadoFluxo(telefone, { fluxo: 'c8', passo: 'cnh' } satisfies EstadoC8);
     return montarResultado(
-      INICIO,
+      msgs.c8_inicio,
       [
         {
           ferramenta: 'atualizar_motorista',
@@ -191,7 +167,14 @@ export async function tentarFluxoCadastro(opts: {
 
   const midiaId = extrairMidiaId(itens);
   if (!midiaId) {
-    return montarResultado(REPROMPT[passoAtual], [], `reprompt_${passoAtual}`);
+    const reprompts: Record<PassoCadastro, string> = {
+      cnh: msgs.c8_reprompt_cnh,
+      crlv: msgs.c8_reprompt_crlv,
+      antt: msgs.c8_reprompt_antt,
+      endereco: msgs.c8_reprompt_endereco,
+      caminhao: msgs.c8_reprompt_caminhao,
+    };
+    return montarResultado(reprompts[passoAtual], [], `reprompt_${passoAtual}`);
   }
 
   const conteudoOcr = extrairConteudoMidia(itens);
@@ -206,7 +189,7 @@ export async function tentarFluxoCadastro(opts: {
     if (tentativas >= 2) {
       await limparEstadoFluxo(telefone);
       return montarResultado(
-        MSG_OCR_ESCALONAR,
+        msgs.c8_ocr_escalonar,
         [
           {
             ferramenta: 'escalonar_negociacao',
@@ -221,13 +204,13 @@ export async function tentarFluxoCadastro(opts: {
       );
     }
 
-    return montarResultado(MSG_OCR_ILEGIVEL, [], `ocr_reprompt_${passoAtual}`);
+    return montarResultado(msgs.c8_ocr_ilegivel, [], `ocr_reprompt_${passoAtual}`);
   }
 
   if (passoAtual === 'caminhao') {
     await limparEstadoFluxo(telefone);
     return montarResultado(
-      FECHAMENTO,
+      msgs.c8_fechamento,
       [
         {
           ferramenta: 'grava_ocr',
@@ -244,8 +227,14 @@ export async function tentarFluxoCadastro(opts: {
 
   const proximo = proximoPasso(passoAtual)!;
   await salvarEstadoFluxo(telefone, { fluxo: 'c8', passo: proximo } satisfies EstadoC8);
+  const confirmacoes: Record<Exclude<PassoCadastro, 'caminhao'>, string> = {
+    cnh: msgs.c8_confirmacao_cnh,
+    crlv: msgs.c8_confirmacao_crlv,
+    antt: msgs.c8_confirmacao_antt,
+    endereco: msgs.c8_confirmacao_endereco,
+  };
   return montarResultado(
-    CONFIRMACAO[passoAtual],
+    confirmacoes[passoAtual],
     [
       {
         ferramenta: 'grava_ocr',

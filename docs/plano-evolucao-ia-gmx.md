@@ -13,16 +13,17 @@
 | Campo | Valor |
 |-------|--------|
 | **IA em produção** | 🔴 PAUSADA (global) — incidente fila 2026-06-15 |
-| **Próxima tarefa** | `O2.2` — OCR com retry programático |
-| **Bloqueio atual** | Nenhum |
+| **Próxima tarefa** | `C1.5` — enriquecer diff, autor e rollback das edições |
+| **Bloqueio atual** | Orquestração parcial: prompt principal e OCR no Postgres, mas camadas críticas ainda hardcoded |
 | **Plano disparo ERP** | F1–F3 ✅ · F4 ⚠️ · F5 ✅ · F6 ❌ → ver [plano-disparo-ofertas-gmx.md](./plano-disparo-ofertas-gmx.md) |
-| **Última atualização** | 2026-06-15 (contexto ERP completo + atualização docs) |
+| **Última atualização** | 2026-06-16 (simulador visual + trilha de orquestração viva) |
 
 ### Progresso geral
 
 ```
 Trilha A (inteligência):  [████░░░░░░] 4/18
 Trilha B (produto ERP):   [██████░░░░] 5/8 fases
+Trilha C (orquestração):  [██████░░░░] 6/10 fases
 Guardrails pós-incidente: [███████░░░] 4/5
 ```
 
@@ -133,6 +134,38 @@ Detalhe completo: [plano-disparo-ofertas-gmx.md](./plano-disparo-ofertas-gmx.md)
 
 ---
 
+## Trilha C — Orquestração viva de prompts e comandos WhatsApp
+
+Meta: todo texto operacional relevante deve ficar **editável, auditável e versionável**, e operadores autorizados devem conseguir orientar a IA por portal ou por WhatsApp sem editar código.
+
+| ID | Tarefa | Entrega | Critério de saída | Deps |
+|----|--------|---------|-------------------|------|
+| C1.1 | Inventário de prompts e mensagens | mapa `postgres vs hardcoded vs híbrido` no portal | ✅ operador vê o que já é editável e o que ainda exige deploy | — |
+| C1.2 | Externalizar `CAMADA_HUMANA` | mover `camada-humana.ts` para configuração versionada | ✅ portal salva, backend recarrega sem deploy | C1.1 |
+| C1.3 | Externalizar formatação e OCR forçado | `instrucaoFormatacao` e `OCR_PROMPT_FORCADO` saem do código | ✅ regras de WhatsApp e fallback OCR já podem ser persistidas sem deploy | C1.1 |
+| C1.4 | Externalizar mensagens fixas de fluxos | textos de C7/C8/atualização/canhoto/OCR humano em coleção configurável | ✅ trocar texto operacional principal já não exige alteração no fonte | C1.1 |
+| C1.5 | Versionamento e diff de prompt | histórico com autor, antes/depois e rollback | ⚠️ histórico com antes/depois e carimbo já existe; faltam autor explícito, diff melhor e rollback | C1.2, C1.3 |
+| C2.1 | Canal professor por WhatsApp | números autorizados com papel `professor_prompt` | só números whitelist podem emitir ordens | C1.5 |
+| C2.2 | Professor por áudio | áudio do professor → STT → comando estruturado | ordem por áudio é transcrita e submetida à confirmação | C2.1 |
+| C2.3 | Tools de edição de prompt via conversa | comandos tipo `adicionar regra`, `substituir trecho`, `listar prompt`, `mostrar diff` | backend confirma intenção antes de persistir mudança | C2.1 |
+| C2.4 | Escopo e confirmação | edição escolhe alvo: prompt principal, OCR, camada humana, fluxo específico | nenhuma alteração ambígua é aplicada sem confirmação explícita | C2.3 |
+| C2.5 | Sandbox e publicação | mudança pode ser testada no simulador antes de publicar | operador valida em simulação e então promove para produção | C1.5, C2.3 |
+| C2.6 | Professor auditor por botão ou WhatsApp | comando `avaliar jornadas` no portal ou vindo de número autorizado | IA lê históricos de teste e devolve parecer com pontos fortes, riscos e sugestão de ajuste | C2.1 |
+| C2.7 | Parecer cíclico multi-jornada | rotina que varre todas as jornadas planejadas e emite opinião com bom senso | relatório consolidado por cenário, com nota, crítica e recomendação | C2.6 |
+
+### Observações de arquitetura da Trilha C
+
+- Hoje `prompt_sistema` e `prompt_ocr` já vivem na tabela `configuracao` do Postgres
+- Ainda estão **hardcoded** no código principalmente várias mensagens fixas dos fluxos programáticos
+- O alvo da trilha é transformar essas camadas em **assets orquestráveis**, com versionamento, autorização e trilha de auditoria
+- O canal “professor” deve ser tratado como **comando sensível**, nunca como mensagem comum de motorista
+- O professor auditor precisa ler **históricos de teste**, não só mensagens isoladas, para avaliar qualidade de atendimento com contexto completo
+- A análise do professor deve ser **cíclica**: rodar por botão no portal, por comando WhatsApp autorizado e também após novas baterias de simulação
+
+**Saída Trilha C:** operador consegue editar prompts e textos operacionais pelo portal ou por WhatsApp autorizado, com confirmação, auditoria e possibilidade de rollback.
+
+---
+
 ## Guardrails — pós-incidente 2026-06-15
 
 | ID | Guardrail | Status | Arquivo / nota |
@@ -223,6 +256,12 @@ Relatórios salvos em: `scripts/relatorios-simulacao/`
 
 | Data | Tarefa | Resultado | Próximo |
 |------|--------|-----------|---------|
+| 2026-06-16 | C1.3 OCR fallback | `OCR_PROMPT_FORCADO` também saiu do hardcode operacional e passou a ser persistido na `configuracao`, com leitura no retry de OCR | C1.4 |
+| 2026-06-16 | C1.4 concluído | mensagens de disponibilidade, cadastro, atualização documental, canhoto e OCR humano passaram a ser lidas de `configuracao.mensagens_fluxo`, com editor JSON inicial no portal | C1.5 |
+| 2026-06-16 | C1.5 iniciado | backend ganhou `configuracao_historico` com registro de mudanças em prompt, OCR, orquestração e mensagens de fluxo; portal passou a listar antes/depois recentes | C1.5 |
+| 2026-06-16 | C1.4 parcial | mensagens de disponibilidade, cadastro, atualização documental e OCR humano passaram a ser lidas de `configuracao.mensagens_fluxo`, com editor JSON inicial no portal | C1.4 |
+| 2026-06-16 | C1.2 + portal | `CAMADA_HUMANA` e `instrucaoFormatacao` passaram a ter configuração persistida em Postgres com editor no portal; simulador agora lê prompts, traces e inventário de hardcoded vs Postgres | C1.3 |
+| 2026-06-16 | Trilha C + simulador | portal ganhou simulador visual; inventário mostrou `prompt_sistema` e `prompt_ocr` no Postgres, mas `CAMADA_HUMANA`, `instrucaoFormatacao`, `OCR_PROMPT_FORCADO` e textos de fluxo ainda hardcoded; trilha C criada para orquestração viva e professor via WhatsApp | C1.2 |
 | 2026-06-15 | Contexto ERP | `contexto-erp-motorista.ts`: motorista+docs+embarque+histórico sempre no prompt; `fluxo-atualizar-documento.ts` | O2.2 |
 | 2026-06-15 | O2.1 | State machine C8: CNH→CRLV→ANTT→endereço→caminhão em código, 0 passadas LLM, teste c8 OK | O2.2 |
 | 2026-06-15 | O1.2+O1.3 | Roteador central + silêncio pós-fechamento + cadastro/pagamento programáticos | O2.1 |

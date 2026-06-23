@@ -13,13 +13,14 @@ import {
   montarRespostaConfirmacaoOcr,
   montarRespostaConfirmada,
   montarRespostaDocumentoSalvo,
-  MSG_CONFIRMACAO_NEGADA,
-  MSG_FOTO_ILEGIVEL,
-  MSG_OCR_RECUSA,
-  MSG_PEDIR_FOTO,
-  MSG_TIPO_INCERTO,
-  MSG_TIPO_INCERTO_COM_TEXTO,
+  obterMensagemAtualizacaoConfirmacaoNegada,
+  obterMensagemAtualizacaoFotoIlegivel,
+  obterMensagemAtualizacaoOcrRecusa,
+  obterMensagemAtualizacaoPedirFoto,
+  obterMensagemAtualizacaoTipoIncerto,
+  obterMensagemAtualizacaoTipoIncertoComTexto,
 } from '../util/resposta-ocr-humana.js';
+import { obterConfigMensagensFluxo } from './config-mensagens-fluxo.js';
 
 export interface ResultadoAtualizacaoDoc {
   textoComFerramentas: string;
@@ -44,16 +45,6 @@ const ENTRADA_ATUALIZAR =
 
 const EXCLUIR_DADOS_CADASTRO =
   /atualizar (meus )?dados|alterar (meus )?dados|mudar (minha )?cidade|trocar carroceria|atualizar (meu )?pix|atualizar cadastro|carreta|reboque/i;
-
-const PEDIR_FOTO = MSG_PEDIR_FOTO;
-
-const REPROMPT: Record<PassoCadastro, string> = {
-  cnh: 'Beleza, manda a foto da CNH atualizada por favor',
-  crlv: 'Show, manda a foto do CRLV atualizado por favor',
-  antt: 'Beleza, manda a foto ou PDF da ANTT atualizada por favor',
-  endereco: 'Manda o comprovante de endereço atualizado por favor',
-  caminhao: 'Manda a foto do caminhão (cavalo) atualizada por favor',
-};
 
 const TIPO_OCR: Record<PassoCadastro, string> = {
   cnh: 'cnh',
@@ -116,8 +107,15 @@ function ultimaAssistant(historico: Array<{ role: string; content: string }>): s
 }
 
 function tipoDoReprompt(ultimaAssist: string): PassoCadastro | null {
-  for (const tipo of Object.keys(REPROMPT) as PassoCadastro[]) {
-    if (ultimaAssist.includes(REPROMPT[tipo].slice(0, 22))) return tipo;
+  const marcadores: Record<PassoCadastro, RegExp> = {
+    cnh: /CNH atualizada/i,
+    crlv: /CRLV atualizado/i,
+    antt: /ANTT atualizada|ANTT atualizado/i,
+    endereco: /comprovante de endere[cç]o atualizado/i,
+    caminhao: /caminh[aã]o \(cavalo\) atualizada|caminh[aã]o \(cavalo\) atualizado/i,
+  };
+  for (const tipo of Object.keys(marcadores) as PassoCadastro[]) {
+    if (marcadores[tipo].test(ultimaAssist)) return tipo;
   }
   return null;
 }
@@ -165,6 +163,7 @@ async function processarMidiaComOcr(opts: {
   tentativasFalha?: number;
 }): Promise<ResultadoAtualizacaoDoc> {
   const { telefone, mensagem, midiaId, tipoForcado, tentativasFalha = 0 } = opts;
+  const msgs = await obterConfigMensagensFluxo();
 
   let conteudoOcr = mensagem;
   if (!textoOcrValido(conteudoOcr) || ehRecusaOcr(conteudoOcr)) {
@@ -183,12 +182,12 @@ async function processarMidiaComOcr(opts: {
       return montarResultado(
         proxTentativas >= 2
           ? 'Tô com dificuldade técnica pra ler essa imagem, vou acionar a equipe pra te ajudar com o documento'
-          : MSG_OCR_RECUSA,
+          : await obterMensagemAtualizacaoOcrRecusa(),
         [],
         proxTentativas >= 2 ? 'ocr_escalonar' : 'ocr_recusa',
       );
     }
-    return montarResultado(MSG_FOTO_ILEGIVEL, [], 'ocr_ilegivel');
+    return montarResultado(await obterMensagemAtualizacaoFotoIlegivel(), [], 'ocr_ilegivel');
   }
 
   const textoOcr = extrairCorpoOcr(conteudoOcr);
@@ -199,14 +198,14 @@ async function processarMidiaComOcr(opts: {
     const trecho = textoOcr.replace(/\s+/g, ' ').trim().slice(0, 90);
     const visivel =
       trecho.length > 30
-        ? MSG_TIPO_INCERTO_COM_TEXTO(trecho)
-        : MSG_TIPO_INCERTO;
+        ? await obterMensagemAtualizacaoTipoIncertoComTexto(trecho)
+        : await obterMensagemAtualizacaoTipoIncerto();
     return montarResultado(visivel, [], 'ocr_tipo_incerto');
   }
 
   // Confiança baixa — mostra o que leu e pede confirmação (uma vez)
   if (!tipoForcado && classificacao.confianca < 0.55) {
-    const visivel = montarRespostaConfirmacaoOcr({
+    const visivel = await montarRespostaConfirmacaoOcr({
       tipo,
       campos: classificacao.campos,
       telefone,
@@ -224,7 +223,7 @@ async function processarMidiaComOcr(opts: {
   }
 
   await limparEstadoFluxo(telefone);
-  const visivel = montarRespostaDocumentoSalvo({
+  const visivel = await montarRespostaDocumentoSalvo({
     tipo,
     campos: classificacao.campos,
     telefone,
@@ -246,6 +245,7 @@ export async function tentarAtualizacaoDocumento(opts: {
   itens?: ItemDebounce[];
 }): Promise<ResultadoAtualizacaoDoc | null> {
   const { telefone, mensagem, historico, itens = [] } = opts;
+  const msgs = await obterConfigMensagensFluxo();
   const motorista = await buscarMotoristaPorTelefone(telefone);
   if (!motorista) return null;
 
@@ -261,7 +261,7 @@ export async function tentarAtualizacaoDocumento(opts: {
   if (estado?.aguardandoConfirmacao && estado.midiaIdPendente && estado.tipo) {
     if (ehConfirmacao(mensagem)) {
       await limparEstadoFluxo(telefone);
-      const visivel = montarRespostaConfirmada({
+      const visivel = await montarRespostaConfirmada({
         tipo: estado.tipo,
         campos: estado.camposOcr ?? {},
       });
@@ -278,7 +278,7 @@ export async function tentarAtualizacaoDocumento(opts: {
     }
     if (ehNegacao(mensagem)) {
       await limparEstadoFluxo(telefone);
-      return montarResultado(MSG_CONFIRMACAO_NEGADA, [], 'ocr_confirmacao_negada');
+      return montarResultado(await obterMensagemAtualizacaoConfirmacaoNegada(), [], 'ocr_confirmacao_negada');
     }
   }
 
@@ -306,15 +306,22 @@ export async function tentarAtualizacaoDocumento(opts: {
     if (tipoTexto) {
       tipo = tipoTexto;
     } else {
-      return montarResultado(PEDIR_FOTO, [], 'atualizacao_pedir_foto');
+      return montarResultado(await obterMensagemAtualizacaoPedirFoto(), [], 'atualizacao_pedir_foto');
     }
   }
 
   if (!tipo) return null;
 
   if (!midiaId) {
+    const reprompts: Record<PassoCadastro, string> = {
+      cnh: msgs.atualizacao_reprompt_cnh,
+      crlv: msgs.atualizacao_reprompt_crlv,
+      antt: msgs.atualizacao_reprompt_antt,
+      endereco: msgs.atualizacao_reprompt_endereco,
+      caminhao: msgs.atualizacao_reprompt_caminhao,
+    };
     await salvarEstadoFluxo(telefone, { modo: 'atualizacao', tipo } satisfies EstadoAtualizacao);
-    return montarResultado(REPROMPT[tipo], [], `atualizacao_reprompt_${tipo}`);
+    return montarResultado(reprompts[tipo], [], `atualizacao_reprompt_${tipo}`);
   }
 
   return processarMidiaComOcr({ telefone, mensagem, midiaId, tipoForcado: tipo });

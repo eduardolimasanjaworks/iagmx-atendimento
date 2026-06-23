@@ -1,0 +1,23 @@
+iagmx.sanjaworks.com {
+  encode gzip
+
+  # Evolution API em /evo/*
+  redir /evo /evo/ 308
+  handle_path /evo/* {
+    reverse_proxy evolution-api:8080
+  }
+
+  # App IAGMX (painel, health e webhooks)
+  handle {
+    reverse_proxy app:8095
+  }
+}
+
+gmx.sanjaworks.com {
+  encode gzip
+
+  # ERP/portal GMX (React + proxy /api interno para Directus)
+  handle {
+    reverse_proxy gmx_web:80
+  }
+}

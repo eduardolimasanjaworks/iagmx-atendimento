@@ -6,9 +6,8 @@ import type { WebhookEvolution, MensagemUpsertData } from '../tipos/evolution.js
 import { processarConteudo } from '../servicos/midia.js';
 import { adicionarAoDebounce } from '../servicos/debounce.js';
 import { iaPodeResponder } from '../servicos/pausa.js';
-import { jidParaTelefone } from '../util/telefone.js';
+import { jidEhGrupoOuLista, jidParaTelefone } from '../util/telefone.js';
 import { logEvento } from '../util/log-eventos.js';
-import { garantirDigitando } from '../servicos/digitando-sessao.js';
 import {
   registrarEnfileiramento,
   vincularTraceEnfileirado,
@@ -42,6 +41,10 @@ export async function rotasWebhook(app: FastifyInstance): Promise<void> {
     if (!remoteJid) {
       return reply.status(200).send({ ok: true, ignorado: 'sem remoteJid' });
     }
+    if (jidEhGrupoOuLista(remoteJid)) {
+      logEvento('webhook', 'Grupo/lista ignorado', { remoteJid }, 'warn');
+      return reply.status(200).send({ ok: true, ignorado: 'grupo_ou_lista' });
+    }
 
     // Processa conteúdo de forma assíncrona (STT/OCR podem demorar)
     setImmediate(async () => {
@@ -52,12 +55,17 @@ export async function rotasWebhook(app: FastifyInstance): Promise<void> {
           return;
         }
 
-        garantirDigitando(payload.instance, remoteJid);
+        // #region debug-point A:webhook-start
+        fetch('http://2.24.201.28:7778/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'whatsapp-delay-response',runId:'pre-fix',hypothesisId:'A',location:'webhook.ts:49',msg:'[DEBUG] webhook iniciou processamento da mensagem',data:{instance:payload.instance,remoteJid,telefone,messageId:dados.key?.id ?? null,pushName:dados.pushName ?? null},ts:Date.now()})}).catch(()=>{});
+        // #endregion
 
         const { tipo, conteudo, midiaId, mimetype, fileName } = await processarConteudo(
           dados,
           payload.instance,
         );
+        // #region debug-point A:webhook-content
+        fetch('http://2.24.201.28:7778/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'whatsapp-delay-response',runId:'pre-fix',hypothesisId:'A',location:'webhook.ts:61',msg:'[DEBUG] webhook concluiu processamento do conteudo',data:{remoteJid,telefone,tipo,midiaId:midiaId ?? null,mimetype:mimetype ?? null,fileName:fileName ?? null,conteudoPreview:conteudo.slice(0,160)},ts:Date.now()})}).catch(()=>{});
+        // #endregion
         if (!conteudo.trim()) return;
 
         const traceId = await registrarEnfileiramento({

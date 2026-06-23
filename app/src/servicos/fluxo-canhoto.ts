@@ -4,6 +4,7 @@
 import type { ItemDebounce } from '../tipos/evolution.js';
 import { serializarBlocoFerramenta } from './ferramentas.js';
 import { obterEmbarqueAtivoPrincipal } from './embarque-motorista.js';
+import { obterConfigMensagensFluxo, interpolarMensagem } from './config-mensagens-fluxo.js';
 
 export interface ResultadoFluxoCanhoto {
   textoComFerramentas: string;
@@ -50,6 +51,7 @@ export async function tentarFluxoCanhoto(opts: {
   itens?: ItemDebounce[];
 }): Promise<ResultadoFluxoCanhoto | null> {
   const { telefone, mensagem, historico = [], itens = [] } = opts;
+  const msgs = await obterConfigMensagensFluxo();
   const t = mensagem.trim().toLowerCase();
   const midiaId = extrairMidiaId(itens);
   const entrada = ENTRADA.test(t);
@@ -60,13 +62,13 @@ export async function tentarFluxoCanhoto(opts: {
     const emb = await obterEmbarqueAtivoPrincipal(telefone);
     if (!emb) {
       return montar(
-        'Não achei viagem ativa no seu nome parceiro, quando estiver em viagem manda o canhoto aqui',
+        msgs.canhoto_sem_embarque,
         undefined,
         'canhoto_sem_embarque',
       );
     }
     return montar(
-      `Beleza parceiro, manda a foto do canhoto da entrega (embarque #${emb.id})`,
+      interpolarMensagem(msgs.canhoto_pedir_foto, { embarque_id: String(emb.id) }),
       undefined,
       'canhoto_pedir_foto',
     );
@@ -77,14 +79,14 @@ export async function tentarFluxoCanhoto(opts: {
   const emb = await obterEmbarqueAtivoPrincipal(telefone);
   if (!emb) {
     return montar(
-      'Recebi a imagem parceiro, mas não encontrei embarque ativo seu no sistema — nossa equipe vai conferir',
+      msgs.canhoto_midia_sem_embarque,
       undefined,
       'canhoto_midia_sem_embarque',
     );
   }
 
   return montar(
-    `Canhoto recebido parceiro, já vinculei ao embarque #${emb.id}`,
+    interpolarMensagem(msgs.canhoto_ok, { embarque_id: String(emb.id) }),
     {
       ferramenta: 'grava_comprovante',
       dados: {

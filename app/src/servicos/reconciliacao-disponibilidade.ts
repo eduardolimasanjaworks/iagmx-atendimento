@@ -2,7 +2,6 @@
  * Reconciliação periódica: analisa históricos WhatsApp e garante espelho no ERP (coleção disponivel).
  */
 import { config } from '../config.js';
-import { chatCompletionComMeta } from './chat-providers.js';
 import { ContadorCustoSessao } from '../util/custo-llm.js';
 import {
   listarJidsHistoricoRecente,
@@ -17,6 +16,7 @@ import {
   verificarDisponibilidadeNoErp,
 } from './motorista-gmx.js';
 import { directusConfigurado } from './directus.js';
+import { resolverDisponibilidadeComRedundancia } from './consenso-disponibilidade.js';
 
 const PALAVRAS_DISPONIBILIDADE =
   /\b(dispon[ií]vel|vazio|livre|carregad|em viagem|localiza[cç][aã]o|to em|estou em|t[oô] em|por aqui|cidade|libero|libera)\b/i;
@@ -31,6 +31,7 @@ export interface ExtracaoDisponibilidadeIa {
   disponivel: boolean;
   status: 'disponivel' | 'carregado' | 'indisponivel';
   localizacao_atual: string | null;
+  local_disponibilidade: string | null;
   data_previsao_disponibilidade: string | null;
   confianca: number;
   evidencia: string;
@@ -60,77 +61,47 @@ function formatarTranscricao(msgs: MensagemHistorico[]): string {
     .join('\n');
 }
 
-function parseJsonExtracao(raw: string): ExtracaoDisponibilidadeIa | null {
-  const limpo = raw
-    .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
-    .trim();
-  const ini = limpo.indexOf('{');
-  const fim = limpo.lastIndexOf('}');
-  if (ini < 0 || fim <= ini) return null;
-  try {
-    const obj = JSON.parse(limpo.slice(ini, fim + 1)) as ExtracaoDisponibilidadeIa;
-    if (typeof obj.confianca !== 'number') obj.confianca = 0;
-    return obj;
-  } catch {
-    return null;
-  }
-}
-
 async function extrairDisponibilidadeComIa(
   transcricao: string,
   telefone: string,
   contador: ContadorCustoSessao,
 ): Promise<ExtracaoDisponibilidadeIa | null> {
-  const prompt = `Analise a conversa WhatsApp abaixo entre motorista e GMX.
-Identifique se o motorista informou DISPONIBILIDADE e/ou LOCALIZAÇÃO atual (ou destino + previsão se carregado).
-
-Responda SOMENTE com JSON válido:
-{
-  "refletiu_disponibilidade": true ou false,
-  "disponivel": true se vazio/disponível para carga, false se carregado/em viagem,
-  "status": "disponivel" | "carregado" | "indisponivel",
-  "localizacao_atual": "Cidade UF" ou null,
-  "data_previsao_disponibilidade": "AAAA-MM-DD HH:mm:ss" ou null (só se carregado),
-  "confianca": 0.0 a 1.0,
-  "evidencia": "trecho curto que comprova"
-}
-
-Regras:
-- refletiu_disponibilidade=true só se há informação clara de local OU status vazio/carregado.
-- localizacao_atual precisa cidade reconhecível (ex: "Campinas SP"), não "perto do posto".
-- Use a informação MAIS RECENTE do motorista.
-- confianca < 0.65 → prefira refletiu_disponibilidade=false.
-
-Conversa:
-${transcricao}`;
-
-  const ia = chatCompletionComMeta(
-    [
-      {
-        role: 'system',
-        content:
-          'Você extrai dados estruturados de conversas logísticas. Responda apenas JSON, sem markdown.',
-      },
-      { role: 'user', content: prompt },
-    ],
-    { temperature: 0.1, max_tokens: 512 },
-  );
-
-  const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`timeout IA reconciliação (${TIMEOUT_IA_MS}ms)`)), TIMEOUT_IA_MS);
+  const historico = transcricao
+    .split('\n')
+    .map((linha) => linha.trim())
+    .filter(Boolean)
+    .map((linha) => ({
+      role: linha.startsWith('IA GMX:') || linha.startsWith('Equipe GMX:') ? 'assistant' : 'user',
+      content: linha.replace(/^[^:]+:\s*/, ''),
+    }));
+  const mensagemAtual = historico.pop()?.content ?? '';
+  const consensoPromise = resolverDisponibilidadeComRedundancia({
+    historico,
+    mensagemAtual,
   });
-
-  const { texto, provedor, modelo, uso } = await Promise.race([ia, timeout]);
-
-  contador.registrar({
-    contexto: `reconciliacao_disponibilidade:${telefone}`,
-    provedor,
-    modelo,
-    uso,
+  const timeout = new Promise<null>((resolve) => {
+    setTimeout(() => resolve(null), TIMEOUT_IA_MS);
   });
-
-  return parseJsonExtracao(texto);
+  const consenso = await Promise.race([consensoPromise, timeout]);
+  if (!consenso) return null;
+  for (const uso of consenso.usos) {
+    contador.registrar({
+      contexto: `reconciliacao_disponibilidade:${telefone}`,
+      provedor: uso.provedor,
+      modelo: uso.modelo,
+      uso: uso.uso,
+    });
+  }
+  return {
+    refletiu_disponibilidade: consenso.assuntoDisponibilidade && consenso.status !== 'indefinido',
+    disponivel: consenso.disponivel === true,
+    status: consenso.status === 'indefinido' ? 'indisponivel' : consenso.status,
+    localizacao_atual: consenso.localizacaoAtual,
+    local_disponibilidade: consenso.localDisponibilidade,
+    data_previsao_disponibilidade: consenso.dataPrevisaoDisponibilidade,
+    confianca: consenso.confianca,
+    evidencia: consenso.evidencia,
+  };
 }
 
 function erpCondizComExtracao(
@@ -142,12 +113,17 @@ function erpCondizComExtracao(
     .trim()
     .toLowerCase();
   const locExt = (ext.localizacao_atual ?? '').trim().toLowerCase();
+  const locDispErp = String(erp.local_disponibilidade ?? '').trim().toLowerCase();
+  const locDispExt = (ext.local_disponibilidade ?? '').trim().toLowerCase();
   const dispErp = erp.disponivel === true;
   if (locExt && locErp) {
     if (!locErp.includes(locExt.split(' ')[0]) && !locExt.includes(locErp.split(' ')[0])) {
       return false;
     }
   } else if (locExt && !locErp) {
+    return false;
+  }
+  if (locDispExt && locDispErp && !locDispErp.includes(locDispExt.split(' ')[0])) {
     return false;
   }
   if (ext.disponivel !== dispErp && ext.status === 'disponivel') return false;
@@ -262,13 +238,14 @@ export async function executarReconciliacaoDisponibilidade(): Promise<ResultadoR
         disponivel: ext.disponivel,
         status: ext.status,
         localizacao_atual: ext.localizacao_atual ?? undefined,
+        local_disponibilidade: ext.local_disponibilidade ?? undefined,
         data_previsao_disponibilidade: ext.data_previsao_disponibilidade ?? undefined,
-        observacao: `reconciliacao_ia ${new Date().toISOString()} — ${ext.evidencia.slice(0, 120)}`,
       });
 
       const verificacao = await verificarDisponibilidadeNoErp(telefone, {
         disponivel: ext.disponivel,
         localizacao_atual: ext.localizacao_atual ?? undefined,
+        local_disponibilidade: ext.local_disponibilidade ?? undefined,
         status: ext.status,
       });
 

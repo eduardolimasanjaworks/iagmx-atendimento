@@ -98,9 +98,8 @@ export async function rotearMensagem(opts: {
   nomeContato?: string;
 }): Promise<ResultadoRoteador> {
   const { telefone, mensagem, historico, ultimaAssistant, itens = [] } = opts;
-  const t = normalizar(mensagem);
+  const emC7 = estaEmFluxoDisponibilidade(historico);
 
-  const emC7 = estaEmFluxoDisponibilidade(historico) || /^disponibilidade$/.test(t);
   const emFluxoInterno =
     estaEmFluxoCadastro(historico, ultimaAssistant) ||
     estaEmAtualizacaoDocumento(historico, ultimaAssistant) ||

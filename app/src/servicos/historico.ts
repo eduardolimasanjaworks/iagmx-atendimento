@@ -4,6 +4,8 @@
  */
 import { obterRedis } from '../lib/redis.js';
 import { config } from '../config.js';
+import { jidParaTelefone } from '../util/telefone.js';
+import { indexarMemoriaContato, limparMemoriaContato } from './memoria-semanticacontato.js';
 
 const redis = obterRedis();
 const PREFIXO = 'historico:';
@@ -27,6 +29,15 @@ export async function adicionarAoHistorico(
   await redis.rpush(chave, JSON.stringify(msg));
   await redis.ltrim(chave, -config.historicoMaxMensagens, -1);
   await redis.expire(chave, 86400 * 7); // 7 dias
+  if (papel !== 'system') {
+    const telefone = jidParaTelefone(remoteJid);
+    void indexarMemoriaContato({
+      telefone,
+      papel,
+      texto: conteudo,
+      timestamp: msg.timestamp,
+    }).catch(() => {});
+  }
 }
 
 /** Mapeia papel interno para roles aceitos pelo modelo */
@@ -35,7 +46,9 @@ function paraRoleModelo(
   conteudo: string,
 ): { role: 'user' | 'assistant' | 'system'; content: string } {
   if (papel === 'empresa') {
-    return { role: 'system', content: `[GMX Equipe]: ${conteudo}` };
+    // Saida proativa da GMX precisa se comportar como fala anterior do assistente
+    // para fluxos como disponibilidade, cadastro e canhoto seguirem o roteiro.
+    return { role: 'assistant', content: conteudo };
   }
   return { role: papel, content: conteudo };
 }
@@ -43,9 +56,11 @@ function paraRoleModelo(
 /** Retorna histórico formatado para o modelo */
 export async function obterHistorico(
   remoteJid: string,
+  opts?: { limite?: number },
 ): Promise<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>> {
   const chave = `${PREFIXO}${remoteJid}`;
-  const itens = await redis.lrange(chave, 0, -1);
+  const inicio = opts?.limite ? -Math.max(1, opts.limite) : 0;
+  const itens = await redis.lrange(chave, inicio, -1);
   return itens.map((raw) => {
     const m = JSON.parse(raw) as MensagemHistorico;
     return paraRoleModelo(m.papel, m.conteudo);
@@ -54,7 +69,10 @@ export async function obterHistorico(
 
 /** Limpa histórico de um contato */
 export async function limparHistorico(remoteJid: string): Promise<void> {
-  await redis.del(`${PREFIXO}${remoteJid}`);
+  await Promise.all([
+    redis.del(`${PREFIXO}${remoteJid}`),
+    limparMemoriaContato(jidParaTelefone(remoteJid)),
+  ]);
 }
 
 /** Mensagens brutas com timestamp (auditoria / reconciliação). */

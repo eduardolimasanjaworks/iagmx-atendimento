@@ -3,6 +3,7 @@
  * Vírgulas separam bolhas no envio; sem ponto final.
  */
 import type { PassoCadastro } from '../servicos/fluxo-cadastro.js';
+import { obterConfigMensagensFluxo, interpolarMensagem } from '../servicos/config-mensagens-fluxo.js';
 
 const ROTULOS: Record<PassoCadastro, string> = {
   cnh: 'CNH',
@@ -12,17 +13,14 @@ const ROTULOS: Record<PassoCadastro, string> = {
   caminhao: 'foto do caminhão',
 };
 
-const ABERTURAS = [
-  'Opa recebi a foto aqui',
-  'Beleza deu pra ler sim',
-  'Show recebi aqui',
-  'Fechou vi aqui',
-];
-
-function escolherAbertura(semente: string): string {
+async function escolherAbertura(semente: string): Promise<string> {
+  const cfg = await obterConfigMensagensFluxo();
+  const aberturas = cfg.ocr_humano_aberturas.length
+    ? cfg.ocr_humano_aberturas
+    : ['Opa recebi a foto aqui'];
   let n = 0;
   for (let i = 0; i < semente.length; i++) n += semente.charCodeAt(i);
-  return ABERTURAS[n % ABERTURAS.length];
+  return aberturas[n % aberturas.length];
 }
 
 function fraseCampos(tipo: PassoCadastro, campos: Record<string, string>): string {
@@ -64,66 +62,95 @@ function fraseCampos(tipo: PassoCadastro, campos: Record<string, string>): strin
 }
 
 /** Documento lido com confiança — prova o que entendeu e confirma gravação. */
-export function montarRespostaDocumentoSalvo(opts: {
+export async function montarRespostaDocumentoSalvo(opts: {
   tipo: PassoCadastro;
   campos: Record<string, string>;
   telefone: string;
-}): string {
+}): Promise<string> {
   const { tipo, campos, telefone } = opts;
+  const cfg = await obterConfigMensagensFluxo();
   const doc = ROTULOS[tipo];
-  const abertura = escolherAbertura(telefone);
+  const abertura = await escolherAbertura(telefone);
   const detalhes = fraseCampos(tipo, campos);
 
   if (detalhes) {
-    return `${abertura}, vi que é ${doc} — ${detalhes}, já subi pro cadastro da equipe`;
+    return interpolarMensagem(cfg.ocr_humano_documento_salvo_com_detalhes, {
+      abertura,
+      doc,
+      detalhes,
+    });
   }
-  return `${abertura}, identifiquei ${doc} na imagem, já subi pro cadastro da equipe`;
+  return interpolarMensagem(cfg.ocr_humano_documento_salvo_sem_detalhes, {
+    abertura,
+    doc,
+  });
 }
 
 /** OCR incerto — mostra o que leu e pede confirmação humana. */
-export function montarRespostaConfirmacaoOcr(opts: {
+export async function montarRespostaConfirmacaoOcr(opts: {
   tipo: PassoCadastro;
   campos: Record<string, string>;
   telefone: string;
-}): string {
+}): Promise<string> {
   const { tipo, campos, telefone } = opts;
+  const cfg = await obterConfigMensagensFluxo();
   const doc = ROTULOS[tipo];
-  const abertura = escolherAbertura(telefone);
+  const abertura = await escolherAbertura(telefone);
   const detalhes = fraseCampos(tipo, campos);
 
   if (detalhes) {
-    return `${abertura}, acho que é ${doc} — ${detalhes}, confirma pra mim se é isso que você quer atualizar no cadastro`;
+    return interpolarMensagem(cfg.ocr_humano_confirmacao_com_detalhes, {
+      abertura,
+      doc,
+      detalhes,
+    });
   }
-  return `${abertura}, parece ser ${doc} mas não peguei todos os dados direito, confirma se é isso que você quer atualizar`;
+  return interpolarMensagem(cfg.ocr_humano_confirmacao_sem_detalhes, {
+    abertura,
+    doc,
+  });
 }
 
 /** Após motorista confirmar leitura incerta. */
-export function montarRespostaConfirmada(opts: {
+export async function montarRespostaConfirmada(opts: {
   tipo: PassoCadastro;
   campos: Record<string, string>;
-}): string {
+}): Promise<string> {
+  const cfg = await obterConfigMensagensFluxo();
   const doc = ROTULOS[opts.tipo];
   const detalhes = fraseCampos(opts.tipo, opts.campos);
   if (detalhes) {
-    return `Fechou então, ${doc} — ${detalhes}, já salvei no cadastro`;
+    return interpolarMensagem(cfg.ocr_humano_confirmada_com_detalhes, {
+      doc,
+      detalhes,
+    });
   }
-  return `Fechou, ${doc} salva no cadastro então`;
+  return interpolarMensagem(cfg.ocr_humano_confirmada_sem_detalhes, {
+    doc,
+  });
 }
 
-export const MSG_FOTO_ILEGIVEL =
-  'Eita ficou meio embaçada a foto parceiro, manda de novo com boa luz sem cortar o documento';
+export async function obterMensagemAtualizacaoFotoIlegivel(): Promise<string> {
+  return (await obterConfigMensagensFluxo()).atualizacao_foto_ilegivel;
+}
 
-export const MSG_OCR_RECUSA =
-  'Deu um problema técnico na leitura aqui do meu lado, manda a foto de novo que eu tento outra vez';
+export async function obterMensagemAtualizacaoOcrRecusa(): Promise<string> {
+  return (await obterConfigMensagensFluxo()).atualizacao_ocr_recusa;
+}
 
-export const MSG_TIPO_INCERTO_COM_TEXTO = (trecho: string) =>
-  `Li um pedaço assim: ${trecho}, mas não fechei qual documento é — me fala se é CNH, CRLV ou outro`;
+export async function obterMensagemAtualizacaoTipoIncerto(): Promise<string> {
+  return (await obterConfigMensagensFluxo()).atualizacao_tipo_incerto;
+}
 
-export const MSG_TIPO_INCERTO =
-  'Recebi a foto mas não fechei o tipo de documento, me fala se é CNH, CRLV ou outro que eu salvo certinho';
+export async function obterMensagemAtualizacaoTipoIncertoComTexto(trecho: string): Promise<string> {
+  const cfg = await obterConfigMensagensFluxo();
+  return interpolarMensagem(cfg.atualizacao_tipo_incerto_com_texto, { trecho });
+}
 
-export const MSG_CONFIRMACAO_NEGADA =
-  'Beleza sem problema, manda a foto certa que eu leio de novo';
+export async function obterMensagemAtualizacaoConfirmacaoNegada(): Promise<string> {
+  return (await obterConfigMensagensFluxo()).atualizacao_confirmacao_negada;
+}
 
-export const MSG_PEDIR_FOTO =
-  'Beleza parceiro, manda a foto do documento que você quer atualizar';
+export async function obterMensagemAtualizacaoPedirFoto(): Promise<string> {
+  return (await obterConfigMensagensFluxo()).atualizacao_pedir_foto;
+}

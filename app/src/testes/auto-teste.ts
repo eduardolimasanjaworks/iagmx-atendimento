@@ -12,8 +12,14 @@ import {
   extrairLocalizacaoTexto,
   extrairOfertaGmX,
 } from '../servicos/ferramentas-contexto.js';
+import { montarMemoriaConversaMesmoDia } from '../servicos/memoria-conversa.js';
 import { aleatorioEntre } from '../servicos/config-humanizacao.js';
-import { normalizarTelefone, telefoneParaJid } from '../util/telefone.js';
+import {
+  jidEhGrupoOuLista,
+  normalizarTelefone,
+  telefoneEhContatoValido,
+  telefoneParaJid,
+} from '../util/telefone.js';
 import { obterContextoHorarioBrasilia } from '../util/horario-brasilia.js';
 import {
   classificarEntrada,
@@ -23,6 +29,11 @@ import {
   extrairRespostaMotorista,
   sanitizarVazamentoPensamento,
 } from '../servicos/cadeia-pensamento.js';
+import { rotearMensagem } from '../servicos/roteador-intencao.js';
+import {
+  parseDataLiberacao,
+  tentarFluxoDisponibilidade,
+} from '../servicos/fluxo-disponibilidade.js';
 
 export interface ResultadoTeste {
   nome: string;
@@ -67,6 +78,21 @@ export async function executarTestesUnidade(): Promise<ResultadoTeste[]> {
 
   r.push(assert('extrairLocalizacaoTexto', extrairLocalizacaoTexto('to em Campinas SP') === 'Campinas SP'));
 
+  const memoriaMesmoDia = montarMemoriaConversaMesmoDia([
+    { papel: 'assistant', conteudo: 'Bom dia parceiro, me confirma sua situacao', timestamp: Date.now() - 60000 },
+    { papel: 'user', conteudo: 'to livre', timestamp: Date.now() - 50000 },
+    { papel: 'assistant', conteudo: 'manda a localizacao', timestamp: Date.now() - 40000 },
+    { papel: 'user', conteudo: 'Campinas SP', timestamp: Date.now() - 30000 },
+    { papel: 'assistant', conteudo: 'ok', timestamp: Date.now() - 25000 },
+    { papel: 'user', conteudo: 'preciso atualizar a cnh depois', timestamp: Date.now() - 20000 },
+    { papel: 'assistant', conteudo: 'beleza', timestamp: Date.now() - 15000 },
+    { papel: 'user', conteudo: 'ta certo', timestamp: Date.now() - 10000 },
+    { papel: 'assistant', conteudo: 'fechou', timestamp: Date.now() - 9000 },
+    { papel: 'user', conteudo: 'show', timestamp: Date.now() - 8000 },
+    { papel: 'assistant', conteudo: 'mais algo', timestamp: Date.now() - 7000 },
+  ]);
+  r.push(assert('memoria conversa mesmo dia', memoriaMesmoDia.includes('Campinas SP') && memoriaMesmoDia.includes('CNH')));
+
   const oferta = extrairOfertaGmX([
     {
       role: 'assistant',
@@ -81,11 +107,99 @@ export async function executarTestesUnidade(): Promise<ResultadoTeste[]> {
     {
       telefone: '5511999887766',
       mensagem: 'Campinas SP',
-      historico: [{ role: 'user', content: 'to vazio' }],
+      historico: [
+        {
+          role: 'assistant',
+          content:
+            'Bom dia parceiro, estou atualizando nossa base de parceiros aqui e preciso confirmar se voce esta vazio agora ou se ainda esta carregado',
+        },
+        { role: 'user', content: 'to vazio' },
+      ],
     },
     [],
   );
   r.push(assert('anexarFerramentasProgramaticas', prog.includes('registrar_disponibilidade')));
+
+  const disponibilidadeEspontanea = await rotearMensagem({
+    telefone: '5511999887766',
+    mensagem: 'disponibilidade',
+    historico: [],
+  });
+  r.push(
+    assert(
+      'motorista nao inicia fluxo de disponibilidade',
+      !(disponibilidadeEspontanea.tipo === 'programatico' && disponibilidadeEspontanea.intencao === 'disponibilidade'),
+      'entrada espontanea do motorista nao deveria abrir o cenario 7',
+    ),
+  );
+
+  const disponibilidadeProativa = await rotearMensagem({
+    telefone: '5511999887766',
+    mensagem: 'estou livre',
+    historico: [
+      {
+        role: 'assistant',
+        content:
+          'Bom dia parceiro, estou atualizando nossa base de parceiros aqui e preciso confirmar se voce esta vazio agora ou se ainda esta carregado',
+      },
+    ],
+  });
+  r.push(
+    assert(
+      'disponibilidade proativa pede local depois de livre',
+      disponibilidadeProativa.tipo === 'programatico' &&
+        disponibilidadeProativa.intencao === 'disponibilidade' &&
+        disponibilidadeProativa.passo === 'pede_local',
+      JSON.stringify(disponibilidadeProativa),
+    ),
+  );
+
+  const carregadoLocalAtual = await rotearMensagem({
+    telefone: '5511999887766',
+    mensagem: 'to carregado',
+    historico: [
+      {
+        role: 'assistant',
+        content:
+          'Bom dia parceiro, estou atualizando nossa base de parceiros aqui e preciso confirmar se voce esta vazio agora ou se ainda esta carregado',
+      },
+    ],
+  });
+  r.push(
+    assert(
+      'disponibilidade carregado pede local atual',
+      carregadoLocalAtual.tipo === 'programatico' &&
+        carregadoLocalAtual.intencao === 'disponibilidade' &&
+        carregadoLocalAtual.passo === 'pede_local_atual',
+      JSON.stringify(carregadoLocalAtual),
+    ),
+  );
+
+  const carregadoPerguntaData = await tentarFluxoDisponibilidade({
+    telefone: '5511999887766',
+    mensagem: 'Betim MG',
+    historico: [{ role: 'assistant', content: 'Entendido parceiro, me fala sua localização atual agora com cidade e estado' }],
+  });
+  r.push(
+    assert(
+      'disponibilidade carregado pede data depois da localizacao atual',
+      carregadoPerguntaData?.passo === 'pede_data',
+      JSON.stringify(carregadoPerguntaData),
+    ),
+  );
+
+  const carregadoPerguntaLocalDisponibilidade = await tentarFluxoDisponibilidade({
+    telefone: '5511999887766',
+    mensagem: 'amanha',
+    historico: [{ role: 'assistant', content: 'E em que data você estará liberado para carregar?' }],
+  });
+  r.push(
+    assert(
+      'disponibilidade carregado pede local de liberacao depois da data',
+      carregadoPerguntaLocalDisponibilidade?.passo === 'pede_local_disponibilidade',
+      JSON.stringify(carregadoPerguntaLocalDisponibilidade),
+    ),
+  );
 
   r.push(assert('serializarBlocoFerramenta', serializarBlocoFerramenta('teste', { a: 1 }).includes('teste')));
 
@@ -95,6 +209,16 @@ export async function executarTestesUnidade(): Promise<ResultadoTeste[]> {
 
   r.push(assert('normalizarTelefone', normalizarTelefone('+55 (12) 99791-8525') === '5512997918525'));
   r.push(assert('telefoneParaJid', telefoneParaJid('5512997918525') === '5512997918525@s.whatsapp.net'));
+  r.push(assert('telefoneEhContatoValido contato', telefoneEhContatoValido('5512997918525')));
+  r.push(assert('telefoneEhContatoValido grupo invalido', !telefoneEhContatoValido('1203630253867301234')));
+  r.push(assert('jidEhGrupoOuLista grupo', jidEhGrupoOuLista('120363025386730123@g.us')));
+  r.push(
+    assert(
+      'parseDataLiberacao dia solto',
+      parseDataLiberacao('vou ficar disponivel dia 26', new Date('2026-06-23T12:00:00-03:00')) ===
+        '2026-06-26 08:00:00',
+    ),
+  );
 
   const a = aleatorioEntre(100, 100);
   const b = aleatorioEntre(50, 200);
@@ -113,7 +237,7 @@ export async function executarTestesUnidade(): Promise<ResultadoTeste[]> {
   const clara = classificarEntrada('mudei de carro');
   r.push(assert('entrada operacional clara', clara.qualidade === 'clara'));
 
-  const confusaProg = tentarRespostaEntradaConfusa('asdfghjkl', {
+  const confusaProg = tentarRespostaEntradaConfusa('hshshsh asdfgh', {
     historico: [{ role: 'assistant', content: 'Fala parceiro, sou da GMX, me conta no que você precisa' }],
   });
   r.push(assert('resposta programatica confusa', Boolean(confusaProg)));

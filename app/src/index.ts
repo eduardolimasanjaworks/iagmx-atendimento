@@ -10,13 +10,23 @@ import { inicializarProvedor } from './servicos/openai.js';
 import { validarTokens } from './servicos/tokens.js';
 import { inicializarColecao } from './servicos/qdrant.js';
 import { inicializarColecaoLinguagem } from './servicos/qdrant-linguagem.js';
+import { inicializarColecaoMemoriaContato } from './servicos/memoria-semanticacontato.js';
 import { garantirApoioIntencaoIndexado } from './servicos/seed-apoio-intencao.js';
 import { iniciarWorkerReconciliacaoDisponibilidade } from './servicos/worker-reconciliacao-disponibilidade.js';
+import { inicializarContatoProativo } from './servicos/contato-proativo.js';
+import { iniciarWorkerContatoProativo } from './servicos/worker-contato-proativo.js';
+import { inicializarTreinamentoWhatsapp } from './servicos/treinamento-whatsapp.js';
+import { iniciarWorkerAutoavaliacaoConversas } from './servicos/worker-autoavaliacao-conversas.js';
 
 async function main(): Promise<void> {
-  if (!config.anthropicToken && !config.openaiToken && !config.groqToken) {
+  if (
+    !config.openrouterToken &&
+    !config.anthropicToken &&
+    !config.openaiToken &&
+    !config.groqToken
+  ) {
     console.error(
-      '[init] ERRO: configure claudetoken (recomendado) e/ou openaitoken/groqtoken no .env',
+      '[init] ERRO: configure openroutertoken, claudetoken, openaitoken e/ou groqtoken no .env',
     );
     process.exit(1);
   }
@@ -30,17 +40,20 @@ async function main(): Promise<void> {
   await aguardarDependencias();
 
   await inicializarBanco();
+  await inicializarContatoProativo();
+  await inicializarTreinamentoWhatsapp();
   console.log('[init] Banco Postgres inicializado');
 
   await inicializarColecao();
   await inicializarColecaoLinguagem();
+  await inicializarColecaoMemoriaContato();
   await garantirApoioIntencaoIndexado();
   await sincronizarVetores();
   console.log('[init] Qdrant inicializado');
 
   const tokens = await validarTokens();
   console.log(
-    `[init] Tokens — Claude: ${tokens.claude}, OpenAI: ${tokens.openai}, Groq: ${tokens.groq}, chat: ${tokens.provedorAtivo}`,
+    `[init] Tokens — OpenRouter: ${tokens.openrouter}, Claude: ${tokens.claude}, OpenAI: ${tokens.openai}, Groq: ${tokens.groq}, chat: ${tokens.provedorAtivo}`,
   );
 
   if (tokens.provedorAtivo === 'nenhum') {
@@ -51,6 +64,8 @@ async function main(): Promise<void> {
   iniciarWorkerDebounce();
   iniciarWorkerFilaRespostas();
   iniciarWorkerReconciliacaoDisponibilidade();
+  iniciarWorkerContatoProativo();
+  iniciarWorkerAutoavaliacaoConversas();
   await iniciarServidor();
 }
 

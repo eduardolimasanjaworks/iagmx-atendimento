@@ -1,12 +1,13 @@
 /**
- * Validação dos tokens de API (Claude, OpenAI, Groq).
+ * Validação dos tokens de API (OpenRouter, Claude, OpenAI, Groq).
  */
 import OpenAI from 'openai';
 import { config } from '../config.js';
 
-export type ProvedorAtivo = 'claude' | 'openai' | 'groq' | 'nenhum';
+export type ProvedorAtivo = 'openrouter' | 'claude' | 'openai' | 'groq' | 'nenhum';
 
 export interface StatusTokens {
+  openrouter: boolean;
   claude: boolean;
   openai: boolean;
   groq: boolean;
@@ -14,6 +15,41 @@ export interface StatusTokens {
   provedorAtivo: ProvedorAtivo;
   /** OpenAI necessário para embeddings e Whisper mesmo com Claude no chat */
   openaiUtilidades: boolean;
+}
+
+const ORDEM_FALLBACK: Array<Exclude<ProvedorAtivo, 'nenhum'>> = [
+  'openrouter',
+  'claude',
+  'openai',
+  'groq',
+];
+
+function ordemProvedoresPreferidos(): Array<Exclude<ProvedorAtivo, 'nenhum'>> {
+  const preferido = config.provedorChatPreferido as Exclude<ProvedorAtivo, 'nenhum'>;
+  return [...ORDEM_FALLBACK].sort((a, b) => {
+    if (a === preferido) return -1;
+    if (b === preferido) return 1;
+    return ORDEM_FALLBACK.indexOf(a) - ORDEM_FALLBACK.indexOf(b);
+  });
+}
+
+/** Testa token OpenRouter (API compatível com OpenAI) */
+export async function validarOpenRouter(): Promise<boolean> {
+  if (!config.openrouterHabilitado || !config.openrouterToken) return false;
+  try {
+    const cliente = new OpenAI({
+      apiKey: config.openrouterToken,
+      baseURL: config.openrouterBaseUrl,
+      defaultHeaders: {
+        'HTTP-Referer': config.openrouterReferer,
+        'X-Title': config.openrouterAppName,
+      },
+    });
+    await cliente.models.list();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Testa token Anthropic (Claude) */
@@ -69,19 +105,22 @@ export async function validarGroq(): Promise<boolean> {
 
 /** Valida todos os tokens e indica qual provedor de chat está ativo */
 export async function validarTokens(): Promise<StatusTokens> {
-  const [claude, openai, groq] = await Promise.all([
+  const [openrouter, claude, openai, groq] = await Promise.all([
+    validarOpenRouter(),
     validarClaude(),
     validarOpenAI(),
     validarGroq(),
   ]);
-  const provedorAtivo: ProvedorAtivo = claude
-    ? 'claude'
-    : openai
-      ? 'openai'
-      : groq
-        ? 'groq'
-        : 'nenhum';
+  const disponibilidade: Record<Exclude<ProvedorAtivo, 'nenhum'>, boolean> = {
+    openrouter,
+    claude,
+    openai,
+    groq,
+  };
+  const provedorAtivo =
+    ordemProvedoresPreferidos().find((nome) => disponibilidade[nome]) ?? 'nenhum';
   return {
+    openrouter,
     claude,
     openai,
     groq,

@@ -13,6 +13,7 @@ export interface OpcoesPromptInferencia {
   /** Texto da mensagem atual (RAG linguagem) */
   mensagemUsuario?: string;
   historico?: Array<{ role: string; content: string }>;
+  memoriaConversa?: string;
   anexosLote?: string;
   promptBase?: string;
 }
@@ -39,6 +40,10 @@ export async function montarPromptSistemaInferencia(
   if (opts.mensagemUsuario?.trim()) {
     const refLinguagem = await contextoLinguagemMotoristaParaPrompt(opts.mensagemUsuario);
     if (refLinguagem) partes.push(refLinguagem);
+  }
+
+  if (opts.memoriaConversa?.trim()) {
+    partes.push(opts.memoriaConversa.trim());
   }
 
   if (opts.anexosLote) {

@@ -7,17 +7,27 @@ import {
   listarTracesRecentes,
   obterTrace,
 } from '../servicos/trace-pipeline.js';
+import {
+  gerarAutoavaliacaoConversas,
+  obterUltimaAutoavaliacaoConversas,
+} from '../servicos/autoavaliacao-conversas.js';
+import { painelAdmin, painelPodeVer } from '../servicos/painel-acesso.js';
 
-function verificarAdmin(req: { headers: Record<string, unknown> }): boolean {
-  if (!config.adminKey) return true;
-  return req.headers['x-iagmx-key'] === config.adminKey;
+async function exigirLeituraPainel(
+  req: Parameters<typeof painelAdmin>[0],
+  reply: { status: (code: number) => { send: (body: unknown) => unknown } },
+) {
+  if (painelAdmin(req)) return true;
+  if (await painelPodeVer(req, 'painel_etapas')) return true;
+  reply.status(403).send({ erro: 'Seu login nao pode acessar esta area' });
+  return false;
 }
 
 export async function rotasPipelineAdmin(app: FastifyInstance): Promise<void> {
   app.get<{ Querystring: { limite?: string } }>(
     '/api/pipeline/traces',
     async (req, reply) => {
-      if (!verificarAdmin(req)) return reply.status(401).send({ erro: 'Não autorizado' });
+      if (!(await exigirLeituraPainel(req, reply))) return;
       const limite = Math.min(50, parseInt(req.query.limite ?? '25', 10));
       const traces = await listarTracesRecentes(limite);
       return {
@@ -31,10 +41,26 @@ export async function rotasPipelineAdmin(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>(
     '/api/pipeline/traces/:id',
     async (req, reply) => {
-      if (!verificarAdmin(req)) return reply.status(401).send({ erro: 'Não autorizado' });
+      if (!(await exigirLeituraPainel(req, reply))) return;
       const trace = await obterTrace(req.params.id);
       if (!trace) return reply.status(404).send({ erro: 'Trace não encontrado' });
       return trace;
+    },
+  );
+
+  app.get<{ Querystring: { atualizar?: string } }>(
+    '/api/pipeline/autoavaliacao',
+    async (req, reply) => {
+      if (!(await exigirLeituraPainel(req, reply))) return;
+      const atualizar = req.query.atualizar === '1';
+      const relatorio =
+        (atualizar
+          ? await gerarAutoavaliacaoConversas()
+          : await obterUltimaAutoavaliacaoConversas()) ?? (await gerarAutoavaliacaoConversas());
+      return {
+        build: config.buildId,
+        relatorio,
+      };
     },
   );
 }

@@ -14,6 +14,9 @@ export interface OfertaGmX {
   destino: string;
   valor: number;
   texto: string;
+  operacao?: string;
+  capacidade?: string;
+  configRotaId?: number | null;
 }
 
 export interface ContextoFerramentaInferencia {
@@ -46,6 +49,9 @@ export function extrairOfertaGmX(
     destino: m[2].trim(),
     valor,
     texto,
+    operacao: undefined,
+    capacidade: undefined,
+    configRotaId: null,
   };
 }
 
@@ -119,6 +125,7 @@ function blocoEscalonarNegociacao(
       motivo: opts.motivo,
       origem: oferta.origem,
       destino: oferta.destino,
+      config_rota_id: opts.faixa?.configRotaId ?? oferta.configRotaId ?? undefined,
       valor_ofertado: oferta.valor,
       valor_pedido_motorista: opts.valorPedido,
       valor_minimo: opts.faixa?.valorMinimo,
@@ -189,6 +196,7 @@ export async function construirFerramentaMinima(
       dados: {
         aceite,
         valor_aceito: aceite ? valorAceito : undefined,
+        config_rota_id: faixa?.configRotaId ?? oferta.configRotaId ?? undefined,
         valor_ofertado: oferta.valor,
         valor_minimo: faixa?.valorMinimo,
         valor_maximo: faixa?.valorMaximo,
