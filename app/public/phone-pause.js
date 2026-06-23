@@ -5,7 +5,7 @@
  */
 (() => {
   const $ = (id) => document.getElementById(id);
-  const state = { json: null, timer: null, ultimoTelefone: '' };
+  const state = { json: null, timer: null, ultimoTelefone: '', bloqueado: false };
 
   function telefoneAtual() {
     return window.PhoneMonitorPage?.getPhone?.() || '';
@@ -19,6 +19,7 @@
   }
 
   async function carregarEstado() {
+    if (state.bloqueado) return;
     const telefone = telefoneAtual();
     $('pausePhoneView').value = telefone || '';
     if (!telefone) {
@@ -39,11 +40,17 @@
         data.ia_pausada ? 'warn' : 'ok',
       );
     } catch (error) {
+      if (/autentic|autoriz|admin/i.test(String(error?.message || ''))) {
+        state.bloqueado = true;
+        if (state.timer) clearInterval(state.timer);
+        return setStatus('Seu login atual nao pode consultar a pausa deste contato.', 'warn');
+      }
       setStatus(error.message || 'Falha ao consultar estado de pausa do contato.', 'warn');
     }
   }
 
   async function pausar() {
+    if (state.bloqueado) return;
     const telefone = telefoneAtual();
     if (!telefone) return setStatus('Selecione um contato em foco antes de pausar.', 'warn');
     $('pauseContactBtn').disabled = true;
@@ -62,6 +69,7 @@
   }
 
   async function retomar() {
+    if (state.bloqueado) return;
     const telefone = telefoneAtual();
     if (!telefone) return setStatus('Selecione um contato em foco antes de retomar.', 'warn');
     $('resumeContactBtn').disabled = true;

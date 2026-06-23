@@ -38,6 +38,7 @@ import { montarMemoriaSemanticaContato } from './memoria-semanticacontato.js';
 import { serializarBlocoFerramenta } from './ferramentas.js';
 import { resolverDisponibilidadeComRedundancia } from './consenso-disponibilidade.js';
 import { contatoEmModoTesteImediato } from './modo-teste-imediato.js';
+import { calcularLeadProcessamentoMs } from './lead-resposta.js';
 
 const redis = obterRedis();
 
@@ -57,11 +58,6 @@ function assuntoDisponibilidadeProvavel(
     rota.cenario === 7 ||
     analise?.intencao_provavel === 'disponibilidade'
   );
-}
-
-function leadDigitandoMs(atrasoMs: number): number {
-  if (atrasoMs <= 10_000) return Math.max(1000, Math.floor(atrasoMs / 2));
-  return 10_000;
 }
 
 async function garantirJanelaFinalResposta(remoteJid: string): Promise<{
@@ -93,7 +89,7 @@ async function garantirJanelaFinalResposta(remoteJid: string): Promise<{
 
   const cfg = await obterConfigHumanizacao();
   const atrasoInicialMs = aleatorioEntre(cfg.atrasoInicialMinMs, cfg.atrasoInicialMaxMs);
-  const processarEmMs = Date.now() + Math.max(0, atrasoInicialMs - leadDigitandoMs(atrasoInicialMs));
+  const processarEmMs = Date.now() + Math.max(0, atrasoInicialMs - calcularLeadProcessamentoMs(atrasoInicialMs));
 
   await Promise.all([
     redis.set(chaveProcessar, String(processarEmMs), 'EX', TTL_DEBOUNCE_SEGUNDOS),

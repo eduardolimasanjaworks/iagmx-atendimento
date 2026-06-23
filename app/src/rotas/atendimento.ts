@@ -2,8 +2,8 @@
  * Estado de atendimento IA no ERP — consulta e flags para o portal GMX.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { config } from '../config.js';
 import { normalizarTelefone } from '../util/telefone.js';
+import { painelAdmin, painelAutenticado } from '../servicos/painel-acesso.js';
 import {
   contatoPausado,
   pausarContato,
@@ -15,9 +15,12 @@ import {
   obterEstadoAtendimentoErp,
 } from '../servicos/erp-atendimento-motorista.js';
 
-function verificarAdmin(req: FastifyRequest): boolean {
-  if (!config.adminKey) return true;
-  return req.headers['x-iagmx-key'] === config.adminKey;
+function exigirPainel(req: FastifyRequest): boolean {
+  return painelAutenticado(req);
+}
+
+function exigirAdmin(req: FastifyRequest): boolean {
+  return painelAdmin(req);
 }
 
 export async function rotasAtendimento(app: FastifyInstance): Promise<void> {
@@ -27,11 +30,11 @@ export async function rotasAtendimento(app: FastifyInstance): Promise<void> {
       // #region debug-point C:atendimento-get-entry
       fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'gmx-iagmx-integration', runId: 'pre-fix', hypothesisId: 'C', location: 'iagmx-atendimento/app/src/rotas/atendimento.ts:get', msg: '[DEBUG] handler GET atendimento iniciou', data: { telefoneRaw: req.params.telefone, origin: req.headers.origin ?? null, hasAdminKey: Boolean(req.headers['x-iagmx-key']) }, ts: Date.now() }) }).catch(() => {});
       // #endregion
-      if (!verificarAdmin(req)) {
+      if (!exigirPainel(req)) {
         // #region debug-point C:atendimento-get-unauthorized
         fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'gmx-iagmx-integration', runId: 'pre-fix', hypothesisId: 'C', location: 'iagmx-atendimento/app/src/rotas/atendimento.ts:get', msg: '[DEBUG] atendimento GET bloqueado por auth admin', data: { telefoneRaw: req.params.telefone }, ts: Date.now() }) }).catch(() => {});
         // #endregion
-        return reply.status(401).send({ erro: 'Não autorizado' });
+        return reply.status(401).send({ erro: 'Não autenticado' });
       }
       const telefone = normalizarTelefone(req.params.telefone);
       const erp = await obterEstadoAtendimentoErp(telefone);
@@ -58,8 +61,8 @@ export async function rotasAtendimento(app: FastifyInstance): Promise<void> {
       // #region debug-point C:atendimento-pausar-entry
       fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'gmx-iagmx-integration', runId: 'pre-fix', hypothesisId: 'C', location: 'iagmx-atendimento/app/src/rotas/atendimento.ts:post-pausar', msg: '[DEBUG] handler POST pausar iniciou', data: { telefoneRaw: req.params.telefone, motivo: req.body?.motivo ?? null, origin: req.headers.origin ?? null, hasAdminKey: Boolean(req.headers['x-iagmx-key']) }, ts: Date.now() }) }).catch(() => {});
       // #endregion
-      if (!verificarAdmin(req)) {
-        return reply.status(401).send({ erro: 'Não autorizado' });
+      if (!exigirAdmin(req)) {
+        return reply.status(403).send({ erro: 'Apenas admin pode pausar contato' });
       }
       const telefone = normalizarTelefone(req.params.telefone);
       const motivo = req.body?.motivo ?? 'pausado_pelo_erp';
@@ -74,8 +77,8 @@ export async function rotasAtendimento(app: FastifyInstance): Promise<void> {
   app.delete<{ Params: { telefone: string } }>(
     '/api/atendimento/contato/:telefone/pausar',
     async (req, reply) => {
-      if (!verificarAdmin(req)) {
-        return reply.status(401).send({ erro: 'Não autorizado' });
+      if (!exigirAdmin(req)) {
+        return reply.status(403).send({ erro: 'Apenas admin pode retomar contato' });
       }
       const telefone = normalizarTelefone(req.params.telefone);
       await despausarContato(telefone);
@@ -89,8 +92,8 @@ export async function rotasAtendimento(app: FastifyInstance): Promise<void> {
       // #region debug-point C:atendimento-precisa-entry
       fetch('http://127.0.0.1:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'gmx-iagmx-integration', runId: 'pre-fix', hypothesisId: 'C', location: 'iagmx-atendimento/app/src/rotas/atendimento.ts:post-precisa', msg: '[DEBUG] handler POST precisa iniciou', data: { telefoneRaw: req.params.telefone, motivo: req.body?.motivo ?? null, origin: req.headers.origin ?? null, hasAdminKey: Boolean(req.headers['x-iagmx-key']) }, ts: Date.now() }) }).catch(() => {});
       // #endregion
-      if (!verificarAdmin(req)) {
-        return reply.status(401).send({ erro: 'Não autorizado' });
+      if (!exigirAdmin(req)) {
+        return reply.status(403).send({ erro: 'Apenas admin pode marcar este contato' });
       }
       const telefone = normalizarTelefone(req.params.telefone);
       const motivo = req.body?.motivo ?? 'solicitado_pelo_erp';
@@ -105,8 +108,8 @@ export async function rotasAtendimento(app: FastifyInstance): Promise<void> {
   app.delete<{ Params: { telefone: string } }>(
     '/api/atendimento/contato/:telefone/precisa',
     async (req, reply) => {
-      if (!verificarAdmin(req)) {
-        return reply.status(401).send({ erro: 'Não autorizado' });
+      if (!exigirAdmin(req)) {
+        return reply.status(403).send({ erro: 'Apenas admin pode limpar esta marcação' });
       }
       const telefone = normalizarTelefone(req.params.telefone);
       await limparPrecisaAtendimentoErp(telefone);

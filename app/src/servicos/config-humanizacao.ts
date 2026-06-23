@@ -37,7 +37,7 @@ const CACHE_TTL_MS = 5000;
 
 function normalizar(partial: Partial<ConfigHumanizacao>): ConfigHumanizacao {
   const base = { ...HUMANIZACAO_PADRAO, ...partial };
-  const atrasoInicialMinMs = Math.max(60_000, Math.min(base.atrasoInicialMinMs, base.atrasoInicialMaxMs));
+  const atrasoInicialMinMs = Math.max(10_000, Math.min(base.atrasoInicialMinMs, base.atrasoInicialMaxMs));
   const atrasoInicialMaxMs = Math.min(900_000, Math.max(atrasoInicialMinMs, base.atrasoInicialMaxMs));
   const delayMinMs = Math.max(1200, Math.min(base.delayMinMs, base.delayMaxMs));
   const delayMaxMs = Math.min(10000, Math.max(delayMinMs, base.delayMaxMs));

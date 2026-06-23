@@ -5,7 +5,7 @@
  */
 (() => {
   const $ = (id) => document.getElementById(id);
-  const els = ['phoneInput', 'addPhoneBtn', 'loadBtn', 'refreshBtn', 'copyBtn', 'linkPreview', 'tableBody', 'sumPhone', 'sumState', 'sumTotal', 'sumUpdated', 'sumEta', 'sumDelay', 'phoneSuggestions', 'selectedPhones', 'clearPhonesBtn', 'filterPhone', 'filterOrigin', 'filterStatus', 'filterType', 'filterText'].reduce((acc, id) => ({ ...acc, [id]: $(id) }), {});
+  const els = ['phoneInput', 'addPhoneBtn', 'refreshBtn', 'tableBody', 'sumPhone', 'sumState', 'sumTotal', 'sumUpdated', 'sumEta', 'sumDelay', 'phoneSuggestions', 'selectedPhones', 'clearPhonesBtn', 'filterPhone', 'filterOrigin', 'filterStatus', 'filterType', 'filterText'].reduce((acc, id) => ({ ...acc, [id]: $(id) }), {});
   const state = { activePhone: '', phones: [], lines: [], dataByPhone: new Map(), pollTimer: null };
 
   const soDigitos = (valor) => String(valor || '').replace(/\D/g, '');
@@ -27,16 +27,9 @@
     return lista.length === 1 ? `/phone=${lista[0]}` : `/phone?phones=${lista.join(',')}`;
   }
 
-  function atualizarLinkPreview() {
-    const digitado = soDigitos(els.phoneInput.value);
-    const phones = state.phones.length ? state.phones : (telefoneValido(digitado) ? [digitado] : []);
-    els.linkPreview.textContent = urlMonitor(phones);
-  }
-
   function atualizarUrl() {
     const alvo = urlMonitor(state.phones);
     history.replaceState({}, '', alvo);
-    els.linkPreview.textContent = alvo;
   }
 
   function telefoneFoco() {
@@ -142,6 +135,16 @@
     return true;
   }
 
+  function focarOuAdicionarTelefone(valor) {
+    const telefone = soDigitos(valor);
+    if (!telefoneValido(telefone)) return false;
+    if (!state.phones.includes(telefone)) state.phones = [...state.phones, telefone];
+    state.activePhone = telefone;
+    els.phoneInput.value = '';
+    atualizarTela();
+    return true;
+  }
+
   function removerTelefone(valor) {
     state.phones = state.phones.filter((phone) => phone !== valor);
     state.dataByPhone.delete(valor);
@@ -166,7 +169,6 @@
     }
     state.phones = [...new Set(phones)];
     garantirFoco();
-    els.loadBtn.disabled = true;
     els.refreshBtn.disabled = true;
     try {
       const resultados = await Promise.allSettled(state.phones.map((telefone) => IagmxPainelAuth.json(`/api/monitor/telefone?telefone=${encodeURIComponent(telefone)}`)));
@@ -188,7 +190,6 @@
         els.tableBody.innerHTML = `<tr><td colspan="6" class="empty">${escapeHtml(erros.join(' | '))}</td></tr>`;
       }
     } finally {
-      els.loadBtn.disabled = false;
       els.refreshBtn.disabled = false;
     }
   }
@@ -200,15 +201,6 @@
     }, 2000);
   }
 
-  function copiarLink() {
-    if (!state.phones.length) return;
-    const url = `${window.location.origin}${urlMonitor(state.phones)}`;
-    navigator.clipboard.writeText(url).then(() => {
-      els.copyBtn.textContent = 'Link copiado';
-      setTimeout(() => { els.copyBtn.textContent = 'Copiar link'; }, 1500);
-    });
-  }
-
   function lerTelefonesIniciais() {
     const match = window.location.pathname.match(/^\/phone=([0-9+()\-\s]+)$/);
     const params = new URLSearchParams(window.location.search);
@@ -217,15 +209,11 @@
   }
 
   els.addPhoneBtn.addEventListener('click', () => {
-    if (adicionarTelefone(els.phoneInput.value)) carregar([...state.phones]);
-  });
-  els.loadBtn.addEventListener('click', () => {
-    adicionarTelefone(els.phoneInput.value);
-    if (!state.phones.length) return atualizarTela();
-    carregar([...state.phones]);
+    if (focarOuAdicionarTelefone(els.phoneInput.value)) return carregar([...state.phones]);
+    if (state.phones.length) carregar([...state.phones]);
+    else atualizarTela();
   });
   els.refreshBtn.addEventListener('click', () => carregar([...state.phones]));
-  els.copyBtn.addEventListener('click', copiarLink);
   els.clearPhonesBtn.addEventListener('click', () => {
     state.phones = [];
     state.activePhone = '';
@@ -242,11 +230,10 @@
       atualizarTela();
     }
   });
-  els.phoneInput.addEventListener('input', atualizarLinkPreview);
   els.phoneInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      if (adicionarTelefone(els.phoneInput.value)) carregar([...state.phones]);
+      if (focarOuAdicionarTelefone(els.phoneInput.value)) carregar([...state.phones]);
     }
   });
   [els.filterPhone, els.filterOrigin, els.filterStatus, els.filterType].forEach((el) => el.addEventListener('change', () => {
@@ -260,7 +247,6 @@
     getPhones: () => [...state.phones],
     setPhone(valor) {
       els.phoneInput.value = soDigitos(valor);
-      atualizarLinkPreview();
     },
     recarregar: () => carregar([...state.phones]),
     abrirTelefone(valor) {
@@ -280,7 +266,6 @@
       atualizarTela();
       carregarSugestoes();
       if (state.phones.length) carregar([...state.phones]);
-      else atualizarLinkPreview();
       iniciarPoll();
       window.dispatchEvent(new CustomEvent('phone-monitor-ready', { detail: { telefone: telefoneFoco() || '' } }));
     },

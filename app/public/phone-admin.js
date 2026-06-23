@@ -42,6 +42,14 @@
     if (jornada) $('mensagemInicial').value = jornada.mensagemPadrao || '';
   }
 
+  function moverJornada(delta) {
+    if (!state.jornadas.length) return;
+    const atual = Math.max(0, state.jornadas.findIndex((item) => item.id === $('jornada').value));
+    const proximo = (atual + delta + state.jornadas.length) % state.jornadas.length;
+    $('jornada').value = state.jornadas[proximo].id;
+    atualizarMensagemPadrao();
+  }
+
   function resumoResultado(resultado) {
     return [
       `Telefone: ${resultado.telefone}`,
@@ -205,6 +213,8 @@
       });
     });
     $('jornada').addEventListener('change', atualizarMensagemPadrao);
+    $('journeyPrevBtn').addEventListener('click', () => moverJornada(-1));
+    $('journeyNextBtn').addEventListener('click', () => moverJornada(1));
     $('iniciarBtn').addEventListener('click', iniciarJornada);
     $('recarregarJornadasBtn').addEventListener('click', () => carregarJornadas().catch((error) => {
       setBox('journeyStatus', error.message || 'Falha ao recarregar jornadas', 'warn');

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/phone-monitor.css" />
   <link rel="stylesheet" href="/phone-simulator.css" />
   <link rel="stylesheet" href="/phone-editor.css" />
+  <link rel="stylesheet" href="/phone-contrast.css" />
 </head>
 <body>
   <div class="wrap">
@@ -16,19 +17,12 @@
         <h1>Central unica do contato</h1>
         <p class="muted">Acompanhe o contato, pause a IA, inicie jornadas e rode simulacoes sem sair do mesmo painel.</p>
       </div>
-      <nav class="links">
-        <a href="/">Config</a>
-        <a href="/pipeline">Etapas</a>
-      </nav>
     </header>
 
     <section class="card toolbar">
-      <input id="phoneInput" type="text" inputmode="numeric" list="phoneSuggestions" placeholder="5512997918525" />
+      <input id="phoneInput" type="text" inputmode="numeric" list="phoneSuggestions" placeholder="Digite o telefone com DDD" />
       <datalist id="phoneSuggestions"></datalist>
       <button class="primary" type="button" id="addPhoneBtn">Adicionar contato</button>
-      <button type="button" id="loadBtn">Atualizar selecao</button>
-      <button type="button" id="copyBtn">Copiar link</button>
-      <div class="hint">URL direta: <span id="linkPreview">/phone=5512997918525</span></div>
     </section>
 
     <section class="card selection-card">
@@ -81,11 +75,15 @@
       <div class="grid-2">
         <div class="field">
           <label for="nomeMotorista">Nome do motorista</label>
-          <input id="nomeMotorista" type="text" placeholder="Opcional" />
+          <input id="nomeMotorista" type="text" placeholder="Digite o nome se quiser identificar o motorista" />
         </div>
         <div class="field">
           <label for="jornada">Jornada</label>
           <select id="jornada"></select>
+          <div class="actions" style="margin-top:.55rem">
+            <button id="journeyPrevBtn" type="button">Anterior</button>
+            <button id="journeyNextBtn" type="button">Proxima</button>
+          </div>
         </div>
       </div>
       <div id="jornadaInfo" class="meta-strip"></div>
@@ -191,7 +189,7 @@
         </div>
         <div class="field">
           <label for="trainerName">Nome do professor</label>
-          <input id="trainerName" type="text" placeholder="Opcional" />
+          <input id="trainerName" type="text" placeholder="Digite o nome se quiser identificar o professor" />
         </div>
       </div>
       <div class="field" style="margin-top:.9rem">
