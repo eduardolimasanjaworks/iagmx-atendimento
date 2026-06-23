@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/phone-monitor.css" />
   <link rel="stylesheet" href="/phone-simulator.css" />
   <link rel="stylesheet" href="/phone-editor.css" />
+  <link rel="stylesheet" href="/phone-whatsapp.css" />
   <link rel="stylesheet" href="/phone-contrast.css" />
 </head>
 <body>
@@ -63,6 +64,7 @@
     <div class="panel-switch" role="tablist" aria-label="Acoes do contato">
       <button class="panel-tab active" type="button" data-panel="journeyPanel">Jornada</button>
       <button class="panel-tab" type="button" data-panel="opsPanel">Operacao</button>
+      <button class="panel-tab" type="button" data-panel="whatsappPanel">WhatsApp</button>
       <button class="panel-tab" type="button" data-panel="pausePanel">Pausa</button>
       <button class="panel-tab" type="button" data-panel="trainingPanel">Treinamento</button>
       <button class="panel-tab" type="button" data-panel="simulatorPanel">Simulador</button>
@@ -158,6 +160,49 @@
       <div id="opsStatus" class="result-box">Carregando configuracao operacional.</div>
     </section>
 
+    <section id="whatsappPanel" class="card admin-panel" hidden>
+      <h2>Conexao do numero da IA</h2>
+      <p class="muted">Abra o QR, acompanhe o status e reconecte a instancia sem sair do painel principal.</p>
+      <div class="whatsapp-layout">
+        <div class="whatsapp-box">
+          <div class="whatsapp-head">
+            <div>
+              <div class="table-title">Status da sessao</div>
+              <div class="muted" id="waStatusText">Aguardando consulta.</div>
+            </div>
+            <span id="waBadge" class="badge">verificando...</span>
+          </div>
+          <div class="qr-box">
+            <div class="qr-frame" id="waQrFrame">
+              <div class="qr-placeholder" id="waQrPlaceholder">Clique em "Abrir QR" para carregar a sessao atual.</div>
+              <img id="waQrImg" alt="QR Code WhatsApp" hidden />
+            </div>
+            <div class="actions">
+              <button type="button" id="waBtnAtualizar">Verificar agora</button>
+              <button type="button" class="primary" id="waBtnGerar">Abrir QR</button>
+              <button type="button" id="waBtnReconectar">Reconectar sessao</button>
+            </div>
+            <div class="cooldown-box" id="waCooldownBox">
+              <div class="cooldown-title" id="waCooldownTitle">Calma, estou cuidando disso por aqui.</div>
+              <div class="cooldown-copy" id="waCooldownCopy"></div>
+              <div class="cooldown-track">
+                <div class="cooldown-bar" id="waCooldownBar"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="whatsapp-box">
+          <div class="table-title">Como conectar</div>
+          <div class="whatsapp-steps">
+            <div class="whatsapp-step"><span>1</span><p>Abra o WhatsApp no aparelho que deseja conectar.</p></div>
+            <div class="whatsapp-step"><span>2</span><p>Entre em dispositivos conectados e escolha conectar dispositivo.</p></div>
+            <div class="whatsapp-step"><span>3</span><p>Escaneie o QR desta tela e espere o status ficar conectado.</p></div>
+          </div>
+          <div id="waPanelStatus" class="result-box">O painel do WhatsApp ainda nao foi consultado.</div>
+        </div>
+      </div>
+    </section>
+
     <section id="pausePanel" class="card admin-panel" hidden>
       <h2>Pausar conversa deste contato</h2>
       <p class="muted">Interrompe as respostas da IA somente para o contato em foco, sem afetar os outros telefones selecionados.</p>
@@ -199,7 +244,7 @@
       <div class="actions">
         <button id="trainingProposalBtn" type="button">Criar proposta</button>
         <button id="trainingApplyBtn" class="primary" type="button">Aplicar agora</button>
-        <a class="ghost" href="/index.html">Editor principal</a>
+        <button id="trainingOpenEditorBtn" type="button">Abrir editor daqui</button>
       </div>
       <details class="mini-details">
         <summary>Ver status do modo treinador</summary>
@@ -235,14 +280,78 @@
     </section>
 
     <section id="editorPanel" class="card admin-panel" hidden>
-      <h2>Editor de jornadas e OCR</h2>
-      <p class="muted">Edite o catalogo do disparo e o mapeamento OCR para o Directus no mesmo painel.</p>
-      <div class="panel-switch compact-switch" style="margin-top:.9rem">
-        <button class="panel-tab active" type="button" data-editor="editorJourneyBox">Jornadas</button>
-        <button class="panel-tab" type="button" data-editor="editorOcrBox">OCR</button>
-      </div>
+      <h2>Editor compacto</h2>
+      <p class="muted">Tudo fica no mesmo painel, mas recolhido por padrao para nao sobrecarregar a operacao.</p>
 
-      <div id="editorJourneyBox">
+      <details class="editor-fold">
+        <summary>Resumo tecnico</summary>
+        <div class="editor-summary-grid">
+          <div class="mini-card">
+            <span>Build</span>
+            <strong id="editorBuildValue">-</strong>
+          </div>
+          <div class="mini-card">
+            <span>Modelo</span>
+            <strong id="editorProviderValue">-</strong>
+          </div>
+          <div class="mini-card editor-summary-wide">
+            <span>Servicos</span>
+            <div id="editorHealthChips" class="chip-list soft">
+              <span class="empty-inline">Nenhum status carregado.</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="editor-fold">
+        <summary>IA principal e estilo</summary>
+        <div class="field" style="margin-top:.9rem">
+          <label for="editorPromptPrincipal">Prompt principal</label>
+          <textarea id="editorPromptPrincipal" spellcheck="false"></textarea>
+          <small id="editorPromptMeta">Sem carga ainda.</small>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="editorCamadaHumana">Camada humana</label>
+            <textarea id="editorCamadaHumana" class="compact" spellcheck="false"></textarea>
+          </div>
+          <div class="field">
+            <label for="editorInstrucaoFormatacao">Instrucao de formatacao</label>
+            <textarea id="editorInstrucaoFormatacao" class="compact" spellcheck="false"></textarea>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="editorPromptSalvarBtn" class="primary" type="button">Salvar prompt principal</button>
+          <button id="editorPromptRestaurarBtn" type="button">Restaurar prompt</button>
+          <button id="editorOrquestracaoSalvarBtn" class="primary" type="button">Salvar estilo</button>
+          <button id="editorOrquestracaoRestaurarBtn" type="button">Restaurar estilo</button>
+        </div>
+        <div id="editorCoreStatus" class="result-box">Carregando textos centrais da IA.</div>
+      </details>
+
+      <details class="editor-fold">
+        <summary>Mensagens operacionais dos fluxos</summary>
+        <div class="field" style="margin-top:.9rem">
+          <label for="editorMensagensFiltro">Filtrar mensagens</label>
+          <input id="editorMensagensFiltro" type="text" placeholder="Ex.: canhoto, onboarding, disponibilidade, oferta" />
+        </div>
+        <div id="editorMensagensFluxo" class="flow-grid compact-flow"></div>
+        <div class="actions">
+          <button id="editorMensagensSalvarBtn" class="primary" type="button">Salvar mensagens</button>
+          <button id="editorMensagensRestaurarBtn" type="button">Restaurar mensagens</button>
+          <span class="muted" id="editorMensagensMeta">Sem carga ainda.</span>
+        </div>
+        <div id="editorMensagensStatus" class="result-box">Carregando mensagens operacionais.</div>
+      </details>
+
+      <details class="editor-fold">
+        <summary>Jornadas e OCR</summary>
+        <div class="panel-switch compact-switch" style="margin-top:.9rem">
+          <button class="panel-tab active" type="button" data-editor="editorJourneyBox">Jornadas</button>
+          <button class="panel-tab" type="button" data-editor="editorOcrBox">OCR</button>
+        </div>
+
+        <div id="editorJourneyBox">
         <div class="grid-2">
           <div class="field">
             <label for="editorJornadaSelect">Jornada salva</label>
@@ -281,9 +390,9 @@
           <button id="editorJornadaExcluirBtn" type="button">Excluir</button>
         </div>
         <div id="editorJornadaStatus" class="result-box">Carregando catalogo de jornadas.</div>
-      </div>
+        </div>
 
-      <div id="editorOcrBox" hidden>
+        <div id="editorOcrBox" hidden>
         <div class="grid-2">
           <div class="field">
             <label for="ocrDocSelect">Documento OCR</label>
@@ -340,7 +449,8 @@
           <button id="ocrPromptSalvarBtn" class="primary" type="button">Salvar prompts OCR</button>
         </div>
         <div id="editorOcrStatus" class="result-box">Carregando configuracao OCR.</div>
-      </div>
+        </div>
+      </details>
     </section>
 
     <section class="card table-card">
@@ -405,5 +515,7 @@
   <script src="/phone-pause.js"></script>
   <script src="/phone-simulator.js"></script>
   <script src="/phone-editor.js"></script>
+  <script src="/phone-editor-core.js"></script>
+  <script src="/phone-whatsapp.js"></script>
 </body>
 </html>

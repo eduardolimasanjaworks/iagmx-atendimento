@@ -7,6 +7,76 @@
   margin-bottom: 1rem;
 }
 
+.editor-fold {
+  margin-top: .9rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+  padding: .9rem;
+}
+
+.editor-fold summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.editor-fold[open] summary {
+  margin-bottom: .9rem;
+}
+
+.editor-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.editor-summary-wide {
+  grid-column: 1 / -1;
+}
+
+.chip-list.soft {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+
+.compact-flow {
+  margin-top: .9rem;
+}
+
+.flow-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.flow-item {
+  display: grid;
+  gap: .35rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: .8rem;
+}
+
+.flow-item strong {
+  font-size: .9rem;
+}
+
+.flow-item small {
+  color: var(--muted);
+  font-size: .76rem;
+}
+
+.flow-item textarea {
+  min-height: 132px;
+}
+
+textarea.compact {
+  min-height: 120px;
+}
+
 .grid-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -46,6 +116,8 @@
 }
 
 @media (max-width: 960px) {
+  .editor-summary-grid,
+  .flow-grid,
   .grid-3,
   .stack-grid {
     grid-template-columns: 1fr;

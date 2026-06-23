@@ -194,14 +194,14 @@
     document.querySelectorAll('[data-panel]').forEach((item) => {
       item.classList.toggle('active', item.dataset.panel === alvo);
     });
-    ['journeyPanel', 'opsPanel', 'pausePanel', 'trainingPanel', 'simulatorPanel', 'editorPanel'].forEach((id) => {
+    ['journeyPanel', 'opsPanel', 'whatsappPanel', 'pausePanel', 'trainingPanel', 'simulatorPanel', 'editorPanel'].forEach((id) => {
       $(id).hidden = id !== alvo;
     });
   }
 
   function painelInicial() {
     const painel = new URLSearchParams(window.location.search).get('painel');
-    return ['journeyPanel', 'opsPanel', 'pausePanel', 'trainingPanel', 'simulatorPanel', 'editorPanel'].includes(`${painel}Panel`)
+    return ['journeyPanel', 'opsPanel', 'whatsappPanel', 'pausePanel', 'trainingPanel', 'simulatorPanel', 'editorPanel'].includes(`${painel}Panel`)
       ? `${painel}Panel`
       : 'journeyPanel';
   }
@@ -221,6 +221,7 @@
     }));
     $('trainingProposalBtn').addEventListener('click', () => enviarInstrucao(false));
     $('trainingApplyBtn').addEventListener('click', () => enviarInstrucao(true));
+    $('trainingOpenEditorBtn').addEventListener('click', () => ativarPainel('editorPanel'));
     $('trainingPendencias').addEventListener('click', (event) => {
       const btn = event.target.closest('button');
       if (!btn) return;

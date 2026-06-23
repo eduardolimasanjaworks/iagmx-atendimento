@@ -105,7 +105,7 @@ export async function criarServidor() {
 
   /** Atalho /whatsapp → página de QR */
   app.get('/whatsapp', async (_req, reply) => {
-    return reply.redirect('/whatsapp.html');
+    return reply.redirect('/phone?painel=whatsapp');
   });
 
   app.get('/pipeline', async (_req, reply) => {
@@ -113,7 +113,7 @@ export async function criarServidor() {
   });
 
   app.get('/jornadas', async (_req, reply) => {
-    return reply.redirect('/journey.html');
+    return reply.redirect('/phone?painel=journey');
   });
 
   app.get('/phone', async (_req, reply) => {

@@ -6,7 +6,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const els = ['phoneInput', 'addPhoneBtn', 'refreshBtn', 'tableBody', 'sumPhone', 'sumState', 'sumTotal', 'sumUpdated', 'sumEta', 'sumDelay', 'phoneSuggestions', 'selectedPhones', 'clearPhonesBtn', 'filterPhone', 'filterOrigin', 'filterStatus', 'filterType', 'filterText'].reduce((acc, id) => ({ ...acc, [id]: $(id) }), {});
-  const state = { activePhone: '', phones: [], lines: [], dataByPhone: new Map(), pollTimer: null };
+  const state = { activePhone: '', phones: [], lines: [], dataByPhone: new Map(), pollTimer: null, contexto: null };
 
   const soDigitos = (valor) => String(valor || '').replace(/\D/g, '');
   const telefoneValido = (valor) => soDigitos(valor).length >= 10 && soDigitos(valor).length <= 15;
@@ -23,7 +23,7 @@
 
   function urlMonitor(phones) {
     const lista = phones.filter(telefoneValido);
-    if (!lista.length) return '/phone=5512997918525';
+    if (!lista.length) return '/phone';
     return lista.length === 1 ? `/phone=${lista[0]}` : `/phone?phones=${lista.join(',')}`;
   }
 
@@ -246,6 +246,7 @@
   window.PhoneMonitorPage = {
     getPhone: () => telefoneFoco(),
     getPhones: () => [...state.phones],
+    getContext: () => state.contexto,
     setPhone(valor) {
       els.phoneInput.value = soDigitos(valor);
     },
@@ -261,7 +262,8 @@
 
   IagmxPainelAuth.boot({
     requiredBlock: 'painel_etapas',
-    onReady() {
+    onReady(contexto) {
+      state.contexto = contexto;
       state.phones = lerTelefonesIniciais();
       garantirFoco();
       atualizarTela();

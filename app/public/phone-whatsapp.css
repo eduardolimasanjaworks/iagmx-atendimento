@@ -1,0 +1,141 @@
+/**
+ * Estilos do painel de conexao WhatsApp dentro do /phone.
+ * Mantem QR, cooldown e passos em um modulo visual separado.
+ * Evita reabrir a tela antiga e preserva a interface compacta.
+ */
+.whatsapp-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
+  gap: .9rem;
+  margin-top: .9rem;
+}
+
+.whatsapp-box {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+  padding: .95rem;
+}
+
+.whatsapp-head {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  align-items: flex-start;
+}
+
+.qr-box {
+  margin-top: .9rem;
+  display: grid;
+  gap: .9rem;
+}
+
+.qr-frame {
+  width: min(100%, 320px);
+  min-height: 320px;
+  margin: 0 auto;
+  border-radius: 18px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.qr-placeholder {
+  color: var(--muted);
+  text-align: center;
+  font-size: .9rem;
+  line-height: 1.45;
+}
+
+.cooldown-box {
+  display: none;
+  gap: .5rem;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  background: #fff;
+  padding: .85rem;
+}
+
+.cooldown-box.visible {
+  display: grid;
+}
+
+.cooldown-title {
+  font-weight: 700;
+}
+
+.cooldown-copy {
+  color: var(--muted);
+  font-size: .84rem;
+  line-height: 1.45;
+}
+
+.cooldown-track {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, .2);
+}
+
+.cooldown-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #25d366, #86efac);
+  transition: width .25s ease;
+}
+
+.whatsapp-steps {
+  display: grid;
+  gap: .75rem;
+  margin-top: .9rem;
+}
+
+.whatsapp-step {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: .7rem;
+  align-items: start;
+}
+
+.whatsapp-step span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.whatsapp-step p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.badge.open {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge.connecting {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+@media (max-width: 960px) {
+  .whatsapp-layout {
+    grid-template-columns: 1fr;
+  }
+}
