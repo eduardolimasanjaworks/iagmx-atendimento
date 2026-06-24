@@ -3,6 +3,7 @@
  */
 import { config } from '../config.js';
 import { chaveRotaOperacional } from './rota-operacional.js';
+import { normalizarTrechoRota } from './rota-operacional.js';
 
 type RegrasOperacionais = NonNullable<ConfigRotaGmx['regras_operacionais']>;
 
@@ -161,7 +162,67 @@ export async function buscarConfigRota(opts: {
     return chave === alvo;
   });
 
-  return match ?? null;
+  // #region debug-point oferta-aumento-pausa-rota
+  if (
+    !match &&
+    /ball/i.test(String(opts.origem ?? '')) &&
+    /belem|bel[eé]m/i.test(String(opts.destino ?? ''))
+  ) {
+    fetch('http://2.24.201.28:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'oferta-aumento-pausa',
+        runId: 'pre-fix',
+        hypothesisId: 'H2',
+        location: 'rotas-gmx.ts:buscarConfigRota',
+        msg: '[DEBUG] rota nao casou pela chave operacional exata',
+        data: {
+          opts,
+          alvo,
+          exemploLista: lista
+            .filter(
+              (item) =>
+                String(item.origem ?? '').toLowerCase().includes('ball') ||
+                String(item.destino ?? '').toLowerCase().includes('belém') ||
+                String(item.destino ?? '').toLowerCase().includes('belem'),
+            )
+            .slice(0, 5)
+            .map((item) => ({
+              id: item.id,
+              origem: item.origem,
+              destino: item.destino,
+              operacao: item.operacao,
+              capacidade: item.capacidade,
+              chave: chaveRotaOperacional({
+                origem: item.origem,
+                destino: item.destino,
+                operacao: item.operacao ?? null,
+                capacidade: item.capacidade ?? null,
+              }),
+            })),
+        },
+        ts: Date.now(),
+      }),
+    }).catch(() => undefined);
+  }
+  // #endregion
+
+  if (match) return match;
+
+  const origemNormalizada = normalizarTrechoRota(opts.origem ?? '');
+  const destinoNormalizado = normalizarTrechoRota(opts.destino ?? '');
+  const operacaoNormalizada = normalizarTrechoRota(opts.operacao ?? '');
+  const candidatosSemCapacidade = lista.filter((r) => {
+    return (
+      normalizarTrechoRota(r.origem) === origemNormalizada &&
+      normalizarTrechoRota(r.destino) === destinoNormalizado &&
+      normalizarTrechoRota(r.operacao ?? '') === operacaoNormalizada
+    );
+  });
+  if (candidatosSemCapacidade.length === 1) return candidatosSemCapacidade[0] ?? null;
+
+  return null;
 }
 
 export async function listarTelefonesNotificacao(): Promise<TelefoneNotificacaoGmx[]> {

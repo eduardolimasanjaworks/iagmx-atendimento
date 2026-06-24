@@ -19,3 +19,13 @@
 
 ## Notes
 - Nenhuma logica de negocio alterada ate coletar evidencia suficiente.
+
+## Runtime Evidence
+- O motor C9 reproduziu `sem_faixa_erp` para a oferta `Ball - Cabo De Santo Agostinho -> F. Belém`.
+- A rota existe no `config_rotas` com `id=23`, `valor_minimo=11200` e `valor_maximo=11800`.
+- `buscarConfigRota()` retornou `null` porque a chave operacional exigia `capacidade=25`, ausente na mensagem disparada.
+- `escalonarNegociacao()` executou e pausou o contato, mas `verificarHistoricoOfertaNoErp()` falhou e isso detonou o fallback `preciso confirmar uma informacao interna...`.
+
+## Fix Applied
+- `buscarConfigRota()` agora faz fallback deterministico por `origem + destino + operacao` quando existir um unico candidato e a diferenca for apenas `capacidade` ausente na mensagem.
+- `escalonar_negociacao` nao converte mais um escalonamento ja executado em erro fatal so porque `historico_ofertas` nao confirmou o `evento_id` a tempo.

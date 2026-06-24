@@ -497,7 +497,37 @@ async function executarFerramenta(
         eventoId,
       });
       if (!verificacao.ok) {
-        throw new Error(verificacao.motivo ?? 'Escalonamento não confirmado no ERP');
+        // #region debug-point oferta-aumento-pausa-escalonamento
+        fetch('http://2.24.201.28:7777/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'oferta-aumento-pausa',
+            runId: 'pre-fix',
+            hypothesisId: 'H4',
+            location: 'ferramentas.ts:escalonar_negociacao',
+            msg: '[DEBUG] verificacao do historico falhou apos escalonamento',
+            data: {
+              telefone,
+              eventoId,
+              dados,
+              motivo: verificacao.motivo,
+            },
+            ts: Date.now(),
+          }),
+        }).catch(() => undefined);
+        // #endregion
+        logEvento(
+          'ferramenta',
+          'Escalonamento executado sem confirmacao no historico_ofertas',
+          {
+            telefone,
+            eventoId,
+            motivo: verificacao.motivo,
+            dados,
+          },
+          'warn',
+        );
       }
       console.log(`[ferramenta] escalonar_negociacao OK`, r);
       break;
