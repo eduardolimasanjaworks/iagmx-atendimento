@@ -1,5 +1,7 @@
 /**
- * Embarques vinculados ao motorista (kanban).
+ * Embarques vinculados ao motorista no ERP.
+ * A leitura considera oferta, aceite e atribuicao real.
+ * Isso evita escolhas "principais" quando existe inconsistencia operacional.
  */
 import { directusConfigurado, directusListar, directusPost } from './directus.js';
 import { directusUploadArquivo, directusAssetUrl } from './directus.js';
@@ -16,6 +18,9 @@ export interface EmbarqueAtivo {
   operacao?: string | null;
   rota_status?: string | null;
   config_rota_id?: number | string | null;
+  driver_id?: number | string | null;
+  accepted_motorista_id?: number | string | null;
+  oferta_motorista_id?: number | string | null;
   valor_ofertado?: number | string | null;
   valor_minimo?: number | string | null;
   valor_maximo?: number | string | null;
@@ -32,12 +37,12 @@ const STATUS_ATIVO = [
   'waiting_receipt',
 ];
 
-/** Embarques ativos (driver_id ou oferta_motorista_id). */
+/** Embarques ativos vinculados por oferta, aceite ou atribuicao real. */
 export async function listarEmbarquesAtivos(motoristaId: number): Promise<EmbarqueAtivo[]> {
   if (!directusConfigurado()) return [];
   const campos =
-    'id,status,origin,destination,operacao,rota_status,config_rota_id,valor_ofertado,valor_minimo,valor_maximo,total_value';
-  const [a, b] = await Promise.all([
+    'id,status,origin,destination,operacao,rota_status,config_rota_id,driver_id,accepted_motorista_id,oferta_motorista_id,valor_ofertado,valor_minimo,valor_maximo,total_value';
+  const [a, b, c] = await Promise.all([
     directusListar<EmbarqueAtivo>('embarques', {
       'filter[driver_id][_eq]': String(motoristaId),
       'filter[status][_in]': STATUS_ATIVO.join(','),
@@ -52,10 +57,17 @@ export async function listarEmbarquesAtivos(motoristaId: number): Promise<Embarq
       limit: '5',
       fields: campos,
     }).catch(() => []),
+    directusListar<EmbarqueAtivo>('embarques', {
+      'filter[accepted_motorista_id][_eq]': String(motoristaId),
+      'filter[status][_in]': STATUS_ATIVO.join(','),
+      sort: '-date_updated,-date_created',
+      limit: '5',
+      fields: campos,
+    }).catch(() => []),
   ]);
   const vistos = new Set<string>();
   const out: EmbarqueAtivo[] = [];
-  for (const e of [...a, ...b]) {
+  for (const e of [...a, ...b, ...c]) {
     const k = String(e.id);
     if (vistos.has(k)) continue;
     vistos.add(k);
@@ -68,6 +80,11 @@ export async function obterEmbarqueAtivoPrincipal(telefone: string): Promise<Emb
   const m = await buscarMotoristaPorTelefone(telefone);
   if (!m) return null;
   const lista = await listarEmbarquesAtivos(m.id);
+  if (lista.length > 1) {
+    throw new Error(
+      `motorista_multiplos_embarques_ativos:motorista=${m.id}:total=${lista.length}`,
+    );
+  }
   return lista[0] ?? null;
 }
 

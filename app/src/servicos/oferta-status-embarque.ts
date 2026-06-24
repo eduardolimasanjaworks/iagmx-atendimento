@@ -4,6 +4,7 @@
  * Isso reduz divergencia entre simulacao, fluxo real e portal.
  */
 import { directusListar, directusPatch } from './directus.js';
+import { validarVinculoUnicoMotoristaEmbarque } from './vinculo-embarque-motorista.js';
 
 type EmbarqueOfertaResumo = {
   id: number | string;
@@ -25,6 +26,12 @@ export async function marcarEmbarqueOfertado(opts: {
   configRotaId?: number | string | null;
   valorOfertado?: number | null;
 }): Promise<void> {
+  if (opts.motoristaId != null) {
+    await validarVinculoUnicoMotoristaEmbarque({
+      embarqueId: opts.embarqueId,
+      motoristaId: opts.motoristaId,
+    });
+  }
   await directusPatch('embarques', opts.embarqueId, {
     oferta_disparada_em: new Date().toISOString(),
     rota_status: 'ofertado',
@@ -34,10 +41,12 @@ export async function marcarEmbarqueOfertado(opts: {
     manual_review_owner: null,
     manual_review_at: null,
     manual_review_note: null,
+    ...(opts.motoristaId != null ? { driver_id: null } : {}),
+    ...(opts.motoristaId != null ? { accepted_motorista_id: null } : {}),
     ...(opts.configRotaId != null ? { config_rota_id: Number(opts.configRotaId) } : {}),
     ...(opts.motoristaId != null ? { oferta_motorista_id: Number(opts.motoristaId) } : {}),
     ...(opts.valorOfertado != null ? { valor_ofertado: Number(opts.valorOfertado) } : {}),
-  }).catch(() => undefined);
+  });
 }
 
 export async function marcarEmbarqueAceito(opts: {
@@ -45,6 +54,12 @@ export async function marcarEmbarqueAceito(opts: {
   motoristaId?: number | string | null;
   valorAceito?: number | null;
 }): Promise<void> {
+  if (opts.motoristaId != null) {
+    await validarVinculoUnicoMotoristaEmbarque({
+      embarqueId: opts.embarqueId,
+      motoristaId: opts.motoristaId,
+    });
+  }
   await directusPatch('embarques', opts.embarqueId, {
     rota_status: 'aceito',
     ultimo_evento_oferta_em: new Date().toISOString(),
@@ -52,10 +67,11 @@ export async function marcarEmbarqueAceito(opts: {
     manual_review_completed: true,
     manual_review_at: new Date().toISOString(),
     manual_review_note: null,
+    ...(opts.motoristaId != null ? { driver_id: Number(opts.motoristaId) } : {}),
     ...(opts.motoristaId != null ? { accepted_motorista_id: Number(opts.motoristaId) } : {}),
     ...(opts.motoristaId != null ? { oferta_motorista_id: Number(opts.motoristaId) } : {}),
     ...(opts.valorAceito != null ? { valor_aceito: Number(opts.valorAceito) } : {}),
-  }).catch(() => undefined);
+  });
 }
 
 export async function marcarEmbarqueRecusado(opts: {
@@ -74,8 +90,10 @@ export async function marcarEmbarqueRecusado(opts: {
     manual_review_owner: null,
     manual_review_at: null,
     manual_review_note: null,
+    ...(opts.limparMotorista ? { driver_id: null } : {}),
+    ...(opts.limparMotorista ? { accepted_motorista_id: null } : {}),
     ...(opts.limparMotorista ? { oferta_motorista_id: null } : {}),
-  }).catch(() => undefined);
+  });
 }
 
 export async function marcarEmbarqueAguardandoHumano(opts: {
@@ -83,6 +101,12 @@ export async function marcarEmbarqueAguardandoHumano(opts: {
   motoristaId?: number | string | null;
   motivo: string;
 }): Promise<void> {
+  if (opts.motoristaId != null) {
+    await validarVinculoUnicoMotoristaEmbarque({
+      embarqueId: opts.embarqueId,
+      motoristaId: opts.motoristaId,
+    });
+  }
   await directusPatch('embarques', opts.embarqueId, {
     rota_status: 'aguardando_humano',
     ultimo_evento_oferta_em: new Date().toISOString(),
@@ -90,8 +114,10 @@ export async function marcarEmbarqueAguardandoHumano(opts: {
     manual_review_completed: false,
     manual_review_at: new Date().toISOString(),
     manual_review_note: opts.motivo,
+    ...(opts.motoristaId != null ? { driver_id: null } : {}),
+    ...(opts.motoristaId != null ? { accepted_motorista_id: null } : {}),
     ...(opts.motoristaId != null ? { oferta_motorista_id: Number(opts.motoristaId) } : {}),
-  }).catch(() => undefined);
+  });
 }
 
 export async function limparRevisaoHumanaEmbarque(

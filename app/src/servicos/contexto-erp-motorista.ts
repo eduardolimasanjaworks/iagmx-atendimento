@@ -83,6 +83,7 @@ interface EmbarqueErp {
   pickup_date?: string;
   oferta_disparada_em?: string;
   driver_id?: number | null;
+  accepted_motorista_id?: number | null;
   oferta_motorista_id?: number | null;
 }
 
@@ -137,10 +138,17 @@ async function obterDocumentosDetalhados(motoristaId: number): Promise<string[]>
 
 async function obterEmbarquesMotorista(motoristaId: number): Promise<EmbarqueErp[]> {
   const campos =
-    'id,status,origin,destination,total_value,valor_ofertado,valor_minimo,valor_maximo,rota_status,config_rota_id,operacao,produto,pickup_date,oferta_disparada_em,driver_id,oferta_motorista_id,date_updated';
-  const [porDriver, porOferta] = await Promise.all([
+    'id,status,origin,destination,total_value,valor_ofertado,valor_minimo,valor_maximo,rota_status,config_rota_id,operacao,produto,pickup_date,oferta_disparada_em,driver_id,accepted_motorista_id,oferta_motorista_id,date_updated';
+  const [porDriver, porAceite, porOferta] = await Promise.all([
     directusListar<EmbarqueErp>('embarques', {
       'filter[driver_id][_eq]': String(motoristaId),
+      'filter[status][_in]': STATUS_EMBARQUE_ATIVO.join(','),
+      sort: '-date_updated,-date_created',
+      limit: '5',
+      fields: campos,
+    }).catch(() => []),
+    directusListar<EmbarqueErp>('embarques', {
+      'filter[accepted_motorista_id][_eq]': String(motoristaId),
       'filter[status][_in]': STATUS_EMBARQUE_ATIVO.join(','),
       sort: '-date_updated,-date_created',
       limit: '5',
@@ -156,7 +164,7 @@ async function obterEmbarquesMotorista(motoristaId: number): Promise<EmbarqueErp
   ]);
   const vistos = new Set<string>();
   const todos: EmbarqueErp[] = [];
-  for (const e of [...porDriver, ...porOferta]) {
+  for (const e of [...porDriver, ...porAceite, ...porOferta]) {
     const k = String(e.id);
     if (vistos.has(k)) continue;
     vistos.add(k);

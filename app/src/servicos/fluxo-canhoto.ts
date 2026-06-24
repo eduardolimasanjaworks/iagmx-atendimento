@@ -55,11 +55,28 @@ export async function tentarFluxoCanhoto(opts: {
   const t = mensagem.trim().toLowerCase();
   const midiaId = extrairMidiaId(itens);
   const entrada = ENTRADA.test(t);
+  const obterEmbarqueUnico = async () => {
+    try {
+      return await obterEmbarqueAtivoPrincipal(telefone);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('motorista_multiplos_embarques_ativos')) {
+        return 'ambiguo' as const;
+      }
+      throw error;
+    }
+  };
 
   if (!entrada && !midiaId) return null;
   if (midiaId && !entrada && !pediuCanhotoRecentemente(historico)) return null;
   if (entrada && !midiaId) {
-    const emb = await obterEmbarqueAtivoPrincipal(telefone);
+    const emb = await obterEmbarqueUnico();
+    if (emb === 'ambiguo') {
+      return montar(
+        'Vi mais de um embarque ativo no seu nome e nao vou adivinhar o canhoto. A equipe vai conferir o embarque correto antes de salvar.',
+        undefined,
+        'canhoto_embarque_ambiguo',
+      );
+    }
     if (!emb) {
       return montar(
         msgs.canhoto_sem_embarque,
@@ -76,7 +93,14 @@ export async function tentarFluxoCanhoto(opts: {
 
   if (!midiaId) return null;
 
-  const emb = await obterEmbarqueAtivoPrincipal(telefone);
+  const emb = await obterEmbarqueUnico();
+  if (emb === 'ambiguo') {
+    return montar(
+      'Recebi a midia, mas vi mais de um embarque ativo no seu nome. Nao vou anexar no embarque errado; a equipe vai conferir isso manualmente.',
+      undefined,
+      'canhoto_midia_embarque_ambiguo',
+    );
+  }
   if (!emb) {
     return montar(
       msgs.canhoto_midia_sem_embarque,

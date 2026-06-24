@@ -18,6 +18,7 @@ import { iniciarSimulacaoOferta } from '../servicos/simulacao-ofertas.js';
 import { simulacaoAtivaParaTelefone } from '../servicos/simulacao-cenario.js';
 import { adquirirLockOferta, liberarLockOfertaPorTelefone } from '../servicos/oferta-lock.js';
 import { marcarEmbarqueOfertado } from '../servicos/oferta-status-embarque.js';
+import { validarVinculoUnicoMotoristaEmbarque } from '../servicos/vinculo-embarque-motorista.js';
 
 function verificarAdmin(req: FastifyRequest): boolean {
   if (!config.adminKey) return true;
@@ -55,6 +56,22 @@ export async function rotasDispararOferta(app: FastifyInstance): Promise<void> {
     }
     if (body.valor_ofertado == null || !Number.isFinite(Number(body.valor_ofertado))) {
       return reply.status(400).send({ erro: 'valor_ofertado obrigatório' });
+    }
+    if (body.motorista_id == null || !Number.isFinite(Number(body.motorista_id))) {
+      return reply.status(400).send({ erro: 'motorista_id obrigatório' });
+    }
+
+    try {
+      await validarVinculoUnicoMotoristaEmbarque({
+        embarqueId: body.embarque_id,
+        motoristaId: body.motorista_id,
+      });
+    } catch (error) {
+      return reply.status(409).send({
+        ok: false,
+        enviado: false,
+        motivo: error instanceof Error ? error.message : 'vinculo_motorista_embarque_invalido',
+      });
     }
 
     const mensagens = await obterConfigMensagensFluxo();
