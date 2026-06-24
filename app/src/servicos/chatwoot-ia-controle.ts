@@ -24,6 +24,19 @@ interface ChatwootDefinition {
   attribute_key?: string;
   attribute_display_name?: string;
   attribute_values?: string | string[];
+  attribute_model?: string;
+}
+
+interface ChatwootConversation {
+  id: number;
+  status?: string | null;
+  custom_attributes?: Record<string, unknown> | null;
+  updated_at?: number | string | null;
+  created_at?: number | string | null;
+}
+
+interface ChatwootConversationResponse {
+  payload?: ChatwootConversation[];
 }
 
 export interface ChatwootIaControleStatus {
@@ -33,15 +46,18 @@ export interface ChatwootIaControleStatus {
   nome: string | null;
   phoneNumber: string | null;
   atributoExiste: boolean;
+  atributoModelo: 'contact_attribute' | 'conversation_attribute' | null;
   atributoBruto: unknown;
   valorNormalizado: IaControleValor;
+  conversaId: number | null;
+  conversaStatus: string | null;
   origemToken: 'api_token' | 'secret_key_base' | 'ausente';
 }
 
 function authHeaders() {
   return {
     'Content-Type': 'application/json',
-    api_access_token: configChatwoot.adminApiToken,
+    'api-access-token': configChatwoot.adminApiToken,
   };
 }
 
@@ -100,25 +116,58 @@ function escolherContatoPorTelefone(telefone: string, contatos: ChatwootContact[
 export function normalizarValorIaControle(valor: unknown): IaControleValor {
   if (typeof valor !== 'string') return null;
   const limpo = valor.trim().toLowerCase();
-  if (limpo === 'pausado') return 'pausado';
-  if (limpo === 'ligado') return 'ligado';
+  if (limpo === 'pausado' || limpo === 'pausar') return 'pausado';
+  if (limpo === 'ligado' || limpo === 'ligar') return 'ligado';
   return null;
 }
 
-export async function obterDefinicaoIaControle() {
+async function obterDefinicaoIaControlePorModelo(attributeModel: 0 | 1) {
   const data = await requestJson(
-    `/api/v1/accounts/${configChatwoot.accountId}/custom_attribute_definitions?attribute_model=1`,
+    `/api/v1/accounts/${configChatwoot.accountId}/custom_attribute_definitions?attribute_model=${attributeModel}`,
   );
   const defs = asArray<ChatwootDefinition>(data);
   return defs.find((item) => item.attribute_key === 'ia_controle') ?? null;
+}
+
+export async function obterDefinicaoIaControle() {
+  const conversa = await obterDefinicaoIaControlePorModelo(0);
+  if (conversa) return conversa;
+  return obterDefinicaoIaControlePorModelo(1);
+}
+
+function timestampConversa(conversa: ChatwootConversation): number {
+  const candidatos = [conversa.updated_at, conversa.created_at];
+  for (const valor of candidatos) {
+    if (typeof valor === 'number' && Number.isFinite(valor)) return valor;
+    if (typeof valor === 'string') {
+      const epoch = Date.parse(valor);
+      if (Number.isFinite(epoch)) return epoch;
+    }
+  }
+  return 0;
+}
+
+async function obterConversasContato(contactId: number): Promise<ChatwootConversation[]> {
+  const data = (await requestJson(
+    `/api/v1/accounts/${configChatwoot.accountId}/contacts/${contactId}/conversations`,
+  )) as ChatwootConversationResponse;
+  return asArray<ChatwootConversation>(data.payload).sort((a, b) => timestampConversa(b) - timestampConversa(a));
 }
 
 export async function obterStatusIaControleContato(telefone: string): Promise<ChatwootIaControleStatus> {
   const telefoneNormalizado = normalizarTelefone(telefone);
   const origemToken = tokenDisponivel();
   let definicaoExiste = false;
+  let atributoModelo: ChatwootIaControleStatus['atributoModelo'] = null;
   try {
-    definicaoExiste = Boolean(await obterDefinicaoIaControle());
+    const definicao = await obterDefinicaoIaControle();
+    definicaoExiste = Boolean(definicao);
+    atributoModelo =
+      definicao?.attribute_model === 'conversation_attribute'
+        ? 'conversation_attribute'
+        : definicao?.attribute_model === 'contact_attribute'
+          ? 'contact_attribute'
+          : null;
   } catch {
     definicaoExiste = false;
   }
@@ -134,7 +183,21 @@ export async function obterStatusIaControleContato(telefone: string): Promise<Ch
   }
 
   const contato = escolherContatoPorTelefone(telefoneNormalizado, contatos);
-  const atributoBruto = contato?.custom_attributes?.ia_controle;
+  let atributoBruto = contato?.custom_attributes?.ia_controle;
+  let conversaId: number | null = null;
+  let conversaStatus: string | null = null;
+
+  if (contato && atributoModelo === 'conversation_attribute') {
+    const conversas = await obterConversasContato(contato.id);
+    const conversa = conversas.find((item) => item.custom_attributes && 'ia_controle' in item.custom_attributes)
+      ?? conversas[0]
+      ?? null;
+    if (conversa) {
+      conversaId = conversa.id ?? null;
+      conversaStatus = conversa.status ?? null;
+      atributoBruto = conversa.custom_attributes?.ia_controle ?? null;
+    }
+  }
 
   return {
     telefone: telefoneNormalizado,
@@ -143,8 +206,11 @@ export async function obterStatusIaControleContato(telefone: string): Promise<Ch
     nome: contato?.name ?? null,
     phoneNumber: contato?.phone_number ?? null,
     atributoExiste: definicaoExiste,
+    atributoModelo,
     atributoBruto: atributoBruto ?? null,
     valorNormalizado: normalizarValorIaControle(atributoBruto),
+    conversaId,
+    conversaStatus,
     origemToken,
   };
 }

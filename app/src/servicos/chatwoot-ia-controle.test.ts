@@ -9,11 +9,13 @@ import { normalizarValorIaControle } from './chatwoot-ia-controle.js';
 
 test('normaliza valor pausado do atributo ia_controle', () => {
   assert.equal(normalizarValorIaControle('pausado'), 'pausado');
+  assert.equal(normalizarValorIaControle('pausar'), 'pausado');
   assert.equal(normalizarValorIaControle('  PAUSADO  '), 'pausado');
 });
 
 test('normaliza valor ligado do atributo ia_controle', () => {
   assert.equal(normalizarValorIaControle('ligado'), 'ligado');
+  assert.equal(normalizarValorIaControle('ligar'), 'ligado');
   assert.equal(normalizarValorIaControle(' Ligado '), 'ligado');
 });
 
