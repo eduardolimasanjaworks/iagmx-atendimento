@@ -5,6 +5,7 @@
  */
 (() => {
   const $ = (id) => document.getElementById(id);
+  const state = { view: 'chat' };
 
   function escapeHtml(valor) {
     return String(valor || '').replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]));
@@ -23,6 +24,16 @@
     const atual = data?.estadoAtual || 'Sem atividade recente';
     const previsto = data?.resumoAtual?.previstoParaMs ? ` · previsto ${fmtHora(data.resumoAtual.previstoParaMs)}` : '';
     return `${atual}${previsto}`;
+  }
+
+  function dedupeLinhas(linhas) {
+    const vistos = new Set();
+    return linhas.filter((linha) => {
+      const chave = [linha.horarioMs, linha.tipo, linha.status, linha.mensagem, linha.variante].join('|');
+      if (vistos.has(chave)) return false;
+      vistos.add(chave);
+      return true;
+    });
   }
 
   function classeLinha(linha) {
@@ -76,19 +87,31 @@
       </div>`;
   }
 
-  function renderCard(phone, data, activePhone) {
-    const linhas = [...(data?.linhas || [])]
+  function resumoContato(phone, contato, data, activePhone) {
+    const partes = [phone];
+    if (contato?.local) partes.push(contato.local);
+    if (phone === activePhone) partes.push('em foco');
+    if (contato?.precisaAtendimento) partes.push('precisa ajuda');
+    else if (contato?.iaPausada) partes.push('IA pausada');
+    if (data?.resumoAtual?.previstoParaMs) partes.push(`envio ${fmtHora(data.resumoAtual.previstoParaMs)}`);
+    return partes.join(' · ');
+  }
+
+  function renderCard(phone, data, activePhone, contato) {
+    const linhas = dedupeLinhas([...(data?.linhas || [])])
       .sort((a, b) => a.horarioMs - b.horarioMs)
       .slice(-(phone === activePhone ? 18 : 10));
     const body = linhas.length
       ? linhas.map(renderLinha).join('')
       : '<div class="chat-monitor-empty">Nenhuma atividade recente para este telefone.</div>';
+    const titulo = contato?.nome || phone;
     return `
       <section class="chat-card${phone === activePhone ? ' active' : ''}">
         <div class="chat-card-head">
           <div>
-            <div class="table-title">${escapeHtml(phone)}</div>
-            <div class="muted">${escapeHtml(resumoCard(data))}</div>
+            <div class="table-title">${escapeHtml(titulo)}</div>
+            <div class="muted">${escapeHtml(resumoContato(phone, contato, data, activePhone))}</div>
+            <div class="contact-inline-meta">${escapeHtml(resumoCard(data))}</div>
           </div>
           <button type="button" class="chat-focus-btn" data-focus-phone="${escapeHtml(phone)}">Colocar em foco</button>
         </div>
@@ -101,14 +124,31 @@
     if (!root || !window.PhoneMonitorPage?.getSnapshot) return;
     const snapshot = window.PhoneMonitorPage.getSnapshot();
     if (!snapshot.phones.length) {
-      root.innerHTML = '<div class="chat-monitor-empty">Informe um ou mais telefones para abrir as conversas reais.</div>';
+      root.innerHTML = '<div class="chat-monitor-empty">Abra um ou mais contatos vindos do ERP para ver as conversas reais.</div>';
       return;
     }
     const map = new Map(snapshot.dataByPhone || []);
-    root.innerHTML = snapshot.phones.map((phone) => renderCard(phone, map.get(phone), snapshot.activePhone)).join('');
+    const contatos = new Map(snapshot.contactsByPhone || []);
+    root.innerHTML = snapshot.phones.map((phone) => renderCard(phone, map.get(phone), snapshot.activePhone, contatos.get(phone))).join('');
+  }
+
+  function renderView() {
+    const chatSection = $('chatMonitorSection');
+    const eventsSection = $('eventsMonitorSection');
+    if (chatSection) chatSection.hidden = state.view !== 'chat';
+    if (eventsSection) eventsSection.hidden = state.view !== 'events';
+    document.querySelectorAll('[data-monitor-view]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.monitorView === state.view);
+    });
   }
 
   function bind() {
+    document.querySelectorAll('[data-monitor-view]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.view = btn.dataset.monitorView || 'chat';
+        renderView();
+      });
+    });
     $('chatCards')?.addEventListener('click', (event) => {
       const btn = event.target.closest('[data-focus-phone]');
       if (!btn) return;
@@ -121,6 +161,7 @@
     if (started) return;
     started = true;
     bind();
+    renderView();
     render();
   });
   window.addEventListener('phone-monitor-updated', render);

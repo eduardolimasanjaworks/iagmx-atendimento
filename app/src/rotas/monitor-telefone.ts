@@ -9,6 +9,7 @@ import { listarRespostasPendentes } from '../servicos/fila-respostas.js';
 import { obterDebounceContato } from '../servicos/debounce.js';
 import { obterEstadoMonitorTelefone } from '../servicos/monitor-telefone.js';
 import { listarTracesRecentes } from '../servicos/trace-pipeline.js';
+import { listarContatosMonitorErp } from '../servicos/monitor-contatos-erp.js';
 import { painelAdmin, painelPodeVer } from '../servicos/painel-acesso.js';
 import {
   jidEhGrupoOuLista,
@@ -260,6 +261,15 @@ function montarResumoAtual(opts: {
 }
 
 export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> {
+  app.get('/api/monitor/contatos-erp', async (req, reply) => {
+    if (!(await exigirLeituraPainel(req, reply))) return;
+    const contatos = await listarContatosMonitorErp(150);
+    return {
+      ok: true,
+      contatos,
+    };
+  });
+
   app.get('/api/monitor/telefones-ativos', async (req, reply) => {
     if (!(await exigirLeituraPainel(req, reply))) return;
     const [jids, pendentes, traces] = await Promise.all([
@@ -492,6 +502,20 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
               resumo.mensagem,
               resumo.tipo,
               `ERP ${String(etapa.detalhe?.status || 'ok')}`,
+              { variante: 'erp' },
+            ),
+          );
+          continue;
+        }
+        if (etapa.etapa === 'auto_pausa') {
+          linhas.push(
+            novaLinha(
+              telefone,
+              etapa.ts,
+              'sistema',
+              String(etapa.detalhe?.mensagem || etapa.rotulo),
+              'erp_ajuda_humana',
+              'IA pausada · ajuda humana solicitada',
               { variante: 'erp' },
             ),
           );

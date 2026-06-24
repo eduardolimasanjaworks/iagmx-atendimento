@@ -24,6 +24,7 @@ import { jidParaTelefone } from '../util/telefone.js';
 import { directusConfigurado } from './directus.js';
 import { logEvento } from '../util/log-eventos.js';
 import { invalidarCacheContextoErp } from './contexto-erp-motorista.js';
+import { pausarContato } from './pausa.js';
 import {
   novoEventoHistoricoId,
   verificarHistoricoOfertaNoErp,
@@ -59,6 +60,16 @@ export interface BlocoFerramenta {
 const ALIAS_FERRAMENTA: Record<string, NomeFerramenta> = {
   escalonar_equipe: 'escalonar_negociacao',
 };
+
+const PADROES_RESPOSTA_VAGA = [
+  /preciso confirmar .*?(?:interna|aqui)/i,
+  /preciso verificar/i,
+  /vou verificar/i,
+  /vou checar/i,
+  /deixa eu conferir/i,
+  /confirmar .*?com a equipe/i,
+  /antes de te responder com seguranca/i,
+];
 
 export function serializarBlocoFerramenta(
   ferramenta: string,
@@ -207,6 +218,20 @@ async function midiaDoContexto(
 function resolverNomeFerramenta(nome: string): NomeFerramenta | null {
   const canon = ALIAS_FERRAMENTA[nome] ?? nome;
   return FERRAMENTAS.includes(canon as NomeFerramenta) ? (canon as NomeFerramenta) : null;
+}
+
+async function autoPausarSeRespostaVaga(texto: string, ctx: ContextoFerramenta): Promise<void> {
+  if (!texto || !PADROES_RESPOSTA_VAGA.some((regex) => regex.test(texto))) return;
+  const telefone = jidParaTelefone(ctx.remoteJid);
+  const motivo = 'IA sinalizou incerteza e pediu ajuda humana';
+  await pausarContato(telefone, motivo);
+  if (ctx.traceId) {
+    await adicionarEtapa(ctx.traceId, 'auto_pausa', 'IA pediu apoio humano', {
+      telefone,
+      motivo,
+      mensagem: `${motivo} · ${texto.slice(0, 220)}`,
+    });
+  }
 }
 
 async function executarFerramenta(
@@ -511,10 +536,14 @@ export async function processarFerramentas(
   }
 
   if (houveErroFerramenta) {
-    return 'Parceiro, preciso confirmar uma informacao interna aqui antes de te responder com seguranca';
+    const respostaErro = 'Parceiro, preciso confirmar uma informacao interna aqui antes de te responder com seguranca';
+    await autoPausarSeRespostaVaga(respostaErro, ctx);
+    return respostaErro;
   }
 
-  return texto.trim();
+  const saida = texto.trim();
+  await autoPausarSeRespostaVaga(saida, ctx);
+  return saida;
 }
 
 /** Instruções de ferramentas para o modelo */

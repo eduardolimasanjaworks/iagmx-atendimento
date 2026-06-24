@@ -6,7 +6,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const els = ['phoneInput', 'addPhoneBtn', 'refreshBtn', 'tableBody', 'sumPhone', 'sumState', 'sumTotal', 'sumUpdated', 'sumEta', 'sumDelay', 'phoneSuggestions', 'selectedPhones', 'clearPhonesBtn', 'filterPhone', 'filterOrigin', 'filterStatus', 'filterType', 'filterText'].reduce((acc, id) => ({ ...acc, [id]: $(id) }), {});
-  const state = { activePhone: '', phones: [], lines: [], dataByPhone: new Map(), pollTimer: null, contexto: null };
+  const state = { activePhone: '', phones: [], lines: [], dataByPhone: new Map(), contactsByPhone: new Map(), pollTimer: null, contexto: null };
 
   const soDigitos = (valor) => String(valor || '').replace(/\D/g, '');
   const telefoneValido = (valor) => soDigitos(valor).length >= 10 && soDigitos(valor).length <= 15;
@@ -20,6 +20,9 @@
     return '';
   };
   const fmtHorario = (ms) => (ms ? new Date(ms).toLocaleString('pt-BR') : '-');
+  const contatoMeta = (phone) => state.contactsByPhone.get(phone) || null;
+  const rotuloContato = (phone) => contatoMeta(phone)?.nome || phone;
+  const descricaoContato = (phone) => contatoMeta(phone)?.label || phone;
 
   function urlMonitor(phones) {
     const lista = phones.filter(telefoneValido);
@@ -66,7 +69,7 @@
     }
     els.selectedPhones.innerHTML = state.phones.map((phone) => `
       <div class="chip-item${phone === state.activePhone ? ' active' : ''}">
-        <button type="button" class="chip-main" data-focus="${phone}">${phone}${phone === state.activePhone ? ' (foco)' : ''}</button>
+        <button type="button" class="chip-main" data-focus="${phone}" title="${escapeHtml(descricaoContato(phone))}">${escapeHtml(rotuloContato(phone))}${phone === state.activePhone ? ' (foco)' : ''}</button>
         <button type="button" class="chip-remove" data-remove="${phone}" aria-label="Remover ${phone}">x</button>
       </div>
     `).join('');
@@ -74,7 +77,7 @@
 
   function atualizarFiltroTelefones() {
     const atual = els.filterPhone.value;
-    const options = ['<option value="">Todos os contatos</option>'].concat(state.phones.map((phone) => `<option value="${phone}">${phone}</option>`));
+    const options = ['<option value="">Todos os contatos</option>'].concat(state.phones.map((phone) => `<option value="${phone}">${escapeHtml(rotuloContato(phone))}</option>`));
     els.filterPhone.innerHTML = options.join('');
     els.filterPhone.value = state.phones.includes(atual) ? atual : '';
   }
@@ -156,8 +159,9 @@
 
   async function carregarSugestoes() {
     try {
-      const data = await IagmxPainelAuth.json('/api/monitor/telefones-ativos');
-      els.phoneSuggestions.innerHTML = (data.telefones || []).map((phone) => `<option value="${phone}"></option>`).join('');
+      const data = await IagmxPainelAuth.json('/api/monitor/contatos-erp');
+      state.contactsByPhone = new Map((data.contatos || []).map((item) => [item.telefone, item]));
+      els.phoneSuggestions.innerHTML = (data.contatos || []).map((item) => `<option value="${item.telefone}">${escapeHtml(item.label || item.nome || item.telefone)}</option>`).join('');
     } catch {}
   }
 
@@ -254,6 +258,7 @@
         phones: [...state.phones],
         lines: [...state.lines],
         dataByPhone: [...state.dataByPhone.entries()].map(([phone, data]) => [phone, data]),
+        contactsByPhone: [...state.contactsByPhone.entries()],
       };
     },
     setPhone(valor) {

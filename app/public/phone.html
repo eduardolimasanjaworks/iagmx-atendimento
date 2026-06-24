@@ -21,9 +21,13 @@
     </header>
 
     <section class="card toolbar">
-      <input id="phoneInput" type="text" inputmode="numeric" list="phoneSuggestions" placeholder="Digite o telefone com DDD" />
+      <div class="field">
+        <label for="phoneInput">Contato do ERP</label>
+        <input id="phoneInput" type="text" inputmode="numeric" list="phoneSuggestions" placeholder="Busque por nome, cidade ou telefone do cadastro de motoristas" />
+      </div>
       <datalist id="phoneSuggestions"></datalist>
-      <button class="primary" type="button" id="addPhoneBtn">Adicionar contato</button>
+      <button class="primary" type="button" id="addPhoneBtn">Abrir contato do ERP</button>
+      <div class="hint">Os contatos deste topo sao lidos do cadastro de motoristas do ERP.</div>
     </section>
 
     <section class="card selection-card">
@@ -476,11 +480,15 @@
       </details>
     </section>
 
-    <section class="card table-card">
+    <section id="chatMonitorSection" class="card table-card">
       <div class="table-head">
         <div>
           <div class="table-title">Conversas reais</div>
           <div class="muted">Visualizacao ludica do que ja chegou, do que vai ser enviado e do que foi gravado no banco.</div>
+        </div>
+        <div class="panel-switch compact-switch monitor-switch" role="tablist" aria-label="Modo do monitor">
+          <button class="panel-tab active" type="button" data-monitor-view="chat">Chat real</button>
+          <button class="panel-tab" type="button" data-monitor-view="events">Eventos dos contatos</button>
         </div>
       </div>
       <div id="chatCards" class="chat-monitor-grid">
@@ -488,7 +496,7 @@
       </div>
     </section>
 
-    <section class="card table-card">
+    <section id="eventsMonitorSection" class="card table-card" hidden>
       <div class="table-head">
         <div>
           <div class="table-title">Eventos dos contatos</div>

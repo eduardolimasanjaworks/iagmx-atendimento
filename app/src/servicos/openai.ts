@@ -187,12 +187,28 @@ export async function extrairTextoImagem(
 
   const resumoSchema = await montarResumoSchemaOcr().catch(() => '');
   const promptPadrao = [await obterPromptOcr(), resumoSchema].filter(Boolean).join('\n\n');
-  let texto = await tentar(promptPadrao);
+  const promptForcado = [await obterPromptOcrForcado(), resumoSchema].filter(Boolean).join('\n\n');
+  let ultimoTexto = '';
+  let ultimoErro: unknown = null;
 
-  if (!textoOcrValido(texto) || ehRecusaOcr(texto)) {
-    console.warn('[ocr] Primeira leitura inválida/recusada — retentando com prompt forçado');
-    texto = await tentar([await obterPromptOcrForcado(), resumoSchema].filter(Boolean).join('\n\n'), true);
+  for (let tentativaIdx = 0; tentativaIdx < 5; tentativaIdx += 1) {
+    const forcada = tentativaIdx > 0;
+    try {
+      const texto = await tentar(forcada ? promptForcado : promptPadrao, forcada);
+      ultimoTexto = texto;
+      if (textoOcrValido(texto) && !ehRecusaOcr(texto)) return texto;
+      console.warn(
+        `[ocr] Leitura ${tentativaIdx + 1}/5 invalida${ehRecusaOcr(texto) ? '/recusada' : ''} — repetindo`,
+      );
+    } catch (err) {
+      ultimoErro = err;
+      console.warn(
+        `[ocr] Tentativa ${tentativaIdx + 1}/5 falhou`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
-  return texto;
+  if (ultimoTexto) return ultimoTexto;
+  throw ultimoErro instanceof Error ? ultimoErro : new Error('OCR falhou apos 5 tentativas');
 }
