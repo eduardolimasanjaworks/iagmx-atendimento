@@ -43,6 +43,7 @@
 
   function classeLinha(linha) {
     if (linha.variante === 'previsto') return 'pending';
+    if (linha.tipo === 'atendimento_humano') return 'handoff';
     if (linha.variante === 'erp') return 'erp';
     if (linha.origem === 'cliente') return 'driver';
     if (linha.origem === 'ia' || linha.origem === 'empresa') return 'assistant';
@@ -51,6 +52,7 @@
 
   function tituloLinha(linha) {
     if (linha.variante === 'previsto') return 'GMX prevista';
+    if (linha.tipo === 'atendimento_humano') return 'Atendimento humano';
     if (linha.variante === 'erp') return 'Banco de dados';
     if (linha.origem === 'cliente') return 'Motorista';
     if (linha.origem === 'empresa') return 'GMX';
@@ -61,6 +63,9 @@
   function legendaLinha(linha) {
     if (linha.variante === 'previsto') {
       return `Vai ser enviado ${fmtHora(linha.previstoParaMs)}`;
+    }
+    if (linha.tipo === 'atendimento_humano') {
+      return 'Escalado para humano';
     }
     if (linha.variante === 'erp') {
       return 'Banco atualizado';
@@ -137,6 +142,7 @@
     const tags = [];
     if (linha.variante === 'previsto') tags.push('previsto');
     if (linha.variante === 'erp') tags.push('ERP');
+    if (linha.tipo === 'atendimento_humano') tags.push('humano');
     if (linha.detalhe) tags.push('clique para ver motivo');
     const bubbleAttrs = linha.detalhe
       ? ` role="button" tabindex="0" data-open-detail="${escapeHtml(chaveLinha(linha))}"`

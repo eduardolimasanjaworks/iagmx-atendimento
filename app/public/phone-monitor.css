@@ -228,6 +228,18 @@
   color: #4c1d95;
 }
 
+.bubble.handoff {
+  background: #fff7ed;
+  border: 2px solid #f97316;
+  color: #9a3412;
+}
+
+.bubble.handoff .bubble-head,
+.bubble.handoff .bubble-body,
+.bubble.handoff .tag {
+  color: #9a3412;
+}
+
 .bubble.system {
   background: #f8fafc;
 }
@@ -258,6 +270,10 @@
 
 .row-sistema td:first-child {
   border-left: 3px solid #f59e0b;
+}
+
+.row-handoff td:first-child {
+  border-left: 3px solid #f97316;
 }
 
 .row-empresa td:first-child {

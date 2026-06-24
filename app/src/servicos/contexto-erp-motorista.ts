@@ -7,20 +7,8 @@ import { buscarMotoristaPorTelefone, STATUS_CONTATO_WHATSAPP, type MotoristaGmx 
 import { normalizarTelefone } from '../util/telefone.js';
 import { buscarConfigRota, formatarContextoRotaNegociacao } from './rotas-gmx.js';
 import { resumirHistoricoNominalOfertasPorEmbarque } from './historico-ofertas-gmx.js';
-import { montarBlocoPrioridadeMotorista, type DocumentoPrioridade } from './contexto-erp-prioridades.js';
-
-const COLECOES_DOCS = [
-  { colecao: 'cnh', label: 'CNH', obrigatorio: true, campos: 'cpf,nome,validade,n_registro_cnh,categoria,link,date_updated,date_created' },
-  { colecao: 'crlv', label: 'CRLV', obrigatorio: true, campos: 'placa_cavalo,renavam,modelo,link,date_updated,date_created' },
-  { colecao: 'antt', label: 'ANTT', obrigatorio: true, campos: 'numero_antt,nome,link,date_updated,date_created' },
-  {
-    colecao: 'comprovante_endereco',
-    label: 'Comprovante endereço',
-    obrigatorio: true,
-    campos: 'cep,nome,link,date_updated,date_created',
-  },
-  { colecao: 'fotos', label: 'Fotos caminhão', obrigatorio: false, campos: 'foto_cavalo,foto_lateral,foto_traseira,date_updated,date_created' },
-] as const;
+import { montarBlocoPrioridadeMotorista } from './contexto-erp-prioridades.js';
+import { obterDocumentosDetalhadosMotorista } from './contexto-erp-documentos.js';
 
 const STATUS_EMBARQUE_ATIVO = [
   'new',
@@ -97,11 +85,6 @@ interface HistoricoOferta {
   match_id?: number | null;
 }
 
-interface DocumentoMotoristaContexto extends DocumentoPrioridade {
-  atualizadoEm?: string;
-  detalhe: string;
-}
-
 async function obterUltimaDisponibilidade(motoristaId: number) {
   const lista = await directusListar<Record<string, unknown>>('disponivel', {
     'filter[motorista_id][_eq]': String(motoristaId),
@@ -111,47 +94,6 @@ async function obterUltimaDisponibilidade(motoristaId: number) {
       'disponivel,localizacao_atual,local_disponibilidade,local_destino_atual,local_liberacao_prevista,latitude,longitude,gps_timestamp,data_previsao_disponibilidade,observacao,date_updated,date_created',
   });
   return lista[0] ?? null;
-}
-
-async function obterDocumentosDetalhados(motoristaId: number): Promise<DocumentoMotoristaContexto[]> {
-  const linhas: DocumentoMotoristaContexto[] = [];
-  for (const { colecao, label, campos, obrigatorio } of COLECOES_DOCS) {
-    const docs = await directusListar<Record<string, unknown>>(colecao, {
-      'filter[motorista_id][_eq]': String(motoristaId),
-      sort: '-date_updated,-date_created',
-      limit: '1',
-      fields: campos,
-    }).catch(() => []);
-    if (!docs[0]) {
-      linhas.push({
-        label,
-        obrigatorio,
-        presente: false,
-        detalhe: `- ${label}: pendente`,
-      });
-      continue;
-    }
-    const d = docs[0];
-    const partes: string[] = [];
-    for (const [k, v] of Object.entries(d)) {
-      if (k === 'link' || k.startsWith('foto_')) {
-        if (v) partes.push(k === 'link' ? 'arquivo anexado' : `${k}=sim`);
-        continue;
-      }
-      if (v != null && v !== '' && k !== 'id') partes.push(`${k}=${v}`);
-    }
-    const atualizado = formatarDataBr(
-      (d.date_updated as string) ?? (d.date_created as string),
-    );
-    linhas.push({
-      label,
-      obrigatorio,
-      presente: true,
-      atualizadoEm: atualizado,
-      detalhe: `- ${label}: ${partes.length ? partes.join(', ') : 'arquivo anexado'} (atualizado ${atualizado})`,
-    });
-  }
-  return linhas;
 }
 
 async function obterEmbarquesMotorista(motoristaId: number): Promise<EmbarqueErp[]> {
@@ -412,7 +354,7 @@ async function appendMotorista(
 ): Promise<void> {
   const [disp, docsDetalhe, embarques, historico] = await Promise.all([
     obterUltimaDisponibilidade(motorista.id),
-    obterDocumentosDetalhados(motorista.id),
+    obterDocumentosDetalhadosMotorista(motorista.id, formatarDataBr),
     obterEmbarquesMotorista(motorista.id),
     obterHistoricoOfertas(tel),
   ]);

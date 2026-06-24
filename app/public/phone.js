@@ -15,6 +15,7 @@
   const classeStatus = (status) => {
     const texto = String(status || '').toLowerCase();
     if (texto.includes('erro')) return 'error';
+    if (texto.includes('humano') || texto.includes('pausada')) return 'handoff';
     if (texto.includes('enviado') || texto.includes('recebido') || texto.includes('manual')) return 'sent';
     if (texto.includes('esperando') || texto.includes('digitando') || texto.includes('fila')) return 'waiting';
     return '';
@@ -101,7 +102,7 @@
       return;
     }
     els.tableBody.innerHTML = linhas.map((linha) => `
-      <tr class="row-${linha.origem}">
+      <tr class="row-${linha.origem}${linha.tipo === 'atendimento_humano' ? ' row-handoff' : ''}">
         <td>${fmtHorario(linha.horarioMs)}</td>
         <td>${escapeHtml(linha.phone)}</td>
         <td><span class="badge ${classeOrigem(linha.origem)}">${escapeHtml(linha.origem)}</span></td>
