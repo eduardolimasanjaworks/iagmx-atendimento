@@ -8,6 +8,19 @@ export interface CoordenadasGps {
   longitude: number;
 }
 
+export interface EnderecoGpsDetalhado {
+  localizacao: string;
+  latitude: number;
+  longitude: number;
+  logradouro?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  uf?: string | null;
+}
+
+const CACHE_REVERSE = new Map<string, EnderecoGpsDetalhado>();
+
 const RE_GPS =
   /\[Localiza[cç][aã]o GPS:\s*lat\s*([-\d.]+),\s*lng\s*([-\d.]+)/i;
 
@@ -52,16 +65,19 @@ function montarCidadeUf(
 }
 
 /** Reverse geocoding gratuito (OpenStreetMap). */
-export async function resolverCidadePorGps(
+export async function resolverEnderecoPorGps(
   coords: CoordenadasGps,
-): Promise<{ localizacao: string; latitude: number; longitude: number } | null> {
+): Promise<EnderecoGpsDetalhado | null> {
   const { latitude, longitude } = coords;
+  const chave = `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+  const cached = CACHE_REVERSE.get(chave);
+  if (cached) return cached;
   const url = new URL('https://nominatim.openstreetmap.org/reverse');
   url.searchParams.set('lat', String(latitude));
   url.searchParams.set('lon', String(longitude));
   url.searchParams.set('format', 'json');
   url.searchParams.set('accept-language', 'pt-BR');
-  url.searchParams.set('zoom', '10');
+  url.searchParams.set('zoom', '18');
 
   try {
     const res = await fetch(url.toString(), {
@@ -71,24 +87,56 @@ export async function resolverCidadePorGps(
     if (!res.ok) return null;
     const body = (await res.json()) as {
       address?: {
+        road?: string;
+        pedestrian?: string;
+        suburb?: string;
+        neighbourhood?: string;
         city?: string;
         town?: string;
         village?: string;
         state?: string;
+        state_code?: string;
         municipality?: string;
       };
     };
     const addr = body.address ?? {};
+    const cidade =
+      addr.city ?? addr.municipality ?? addr.town ?? addr.village ?? null;
+    const estado = addr.state ?? null;
+    const uf = addr.state_code?.trim().toUpperCase() ?? null;
     const localizacao =
       montarCidadeUf(
         addr.city ?? addr.municipality,
         addr.town,
         addr.village,
-        addr.state,
+        addr.state_code ?? addr.state,
       ) ?? `lat ${latitude.toFixed(4)}, lng ${longitude.toFixed(4)}`;
-
-    return { localizacao, latitude, longitude };
+    const detalhado: EnderecoGpsDetalhado = {
+      localizacao,
+      latitude,
+      longitude,
+      logradouro: addr.road ?? addr.pedestrian ?? null,
+      bairro: addr.suburb ?? addr.neighbourhood ?? null,
+      cidade,
+      estado,
+      uf,
+    };
+    CACHE_REVERSE.set(chave, detalhado);
+    return detalhado;
   } catch {
     return null;
   }
+}
+
+/** Compatibilidade: mantém retorno reduzido para chamadas antigas. */
+export async function resolverCidadePorGps(
+  coords: CoordenadasGps,
+): Promise<{ localizacao: string; latitude: number; longitude: number } | null> {
+  const resolved = await resolverEnderecoPorGps(coords);
+  if (!resolved) return null;
+  return {
+    localizacao: resolved.localizacao,
+    latitude: resolved.latitude,
+    longitude: resolved.longitude,
+  };
 }

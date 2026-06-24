@@ -157,6 +157,16 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
     }
     const qr = await obterQrCode();
     if (!qr.base64) {
+      const statusAtualizado = await obterStatusConexao();
+      if (statusAtualizado.conectado) {
+        return {
+          conectado: true,
+          base64: null,
+          mensagem: 'WhatsApp ja conectado',
+          cooldownMs: COOLDOWN_MS.qrcode,
+          cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+        };
+      }
       return reply.status(503).send({ erro: 'QR code não disponível. Tente reconectar.' });
     }
     return {
@@ -181,8 +191,20 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
     reportarDebugWhatsapp(req, 'reconectar', 'permitido');
     const status = await obterStatusConexao();
     const qr = await reconectar();
+    const statusAtualizado = await obterStatusConexao();
+    if (!qr.base64 && !statusAtualizado.conectado) {
+      return reply.status(503).send({
+        erro: 'Nao foi possivel gerar novo QR para esta sessao.',
+        instancia: config.whatsappIaInstance,
+        escopo: 'conexao_ativa_da_ia',
+        cooldownMs: COOLDOWN_MS.reconectar,
+        cooldownAte: new Date(ULTIMA_ACAO.reconectar + COOLDOWN_MS.reconectar).toISOString(),
+      });
+    }
     return {
       ok: true,
+      conectado: statusAtualizado.conectado,
+      state: statusAtualizado.state,
       base64: qr.base64,
       pairingCode: qr.pairingCode,
       instancia: config.whatsappIaInstance,

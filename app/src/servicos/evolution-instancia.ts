@@ -2,6 +2,7 @@
  * Operações de instância WhatsApp na Evolution API.
  */
 import { config } from '../config.js';
+import { resolverStatusEvolution } from './evolution-status.js';
 
 interface AlvoWhatsapp {
   nomeLogico: 'ia_local' | 'chatwoot_futuro';
@@ -116,38 +117,9 @@ async function obterStatusConexaoPorAlvo(alvo: AlvoWhatsapp): Promise<StatusCone
     throw new Error(`connectionState falhou (${res.status}): ${corpo}`);
   }
   const dados = (await res.json()) as { instance?: { state?: string } };
-  const state = dados.instance?.state ?? 'desconhecido';
-  const conectado = state === 'open';
 
   let motivoDesconexao: string | undefined;
   let instanciaDetalhe: InstanciaEvolution | undefined;
-  if (!conectado) {
-    try {
-      const listRes = await fetch(`${alvo.url}/instance/fetchInstances`, {
-        headers: headers(alvo.apiKey),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (listRes.ok) {
-        const lista = (await listRes.json()) as InstanciaEvolution[];
-        const inst = lista.find((i) => i.name === alvo.instancia);
-        instanciaDetalhe = inst;
-        if (inst?.disconnectionObject) {
-          const parsed = JSON.parse(inst.disconnectionObject) as {
-            error?: { data?: { attrs?: { type?: string } } };
-          };
-          const tipo = parsed.error?.data?.attrs?.type;
-          if (tipo === 'device_removed') {
-            motivoDesconexao =
-              'Sessao removida pelo WhatsApp. Isso pode acontecer por outro dispositivo conectado ou por instabilidade da versao atual da conexao.';
-          } else if (tipo) {
-            motivoDesconexao = `Desconectado: ${tipo}`;
-          }
-        }
-      }
-    } catch {
-      /* ignora */
-    }
-  }
 
   if (!instanciaDetalhe) {
     try {
@@ -164,12 +136,36 @@ async function obterStatusConexaoPorAlvo(alvo: AlvoWhatsapp): Promise<StatusCone
     }
   }
 
+  const statusResolvido = resolverStatusEvolution({
+    connectionState: dados.instance?.state,
+    fetchConnectionStatus: instanciaDetalhe?.connectionStatus,
+    hasOwnerJid: Boolean(instanciaDetalhe?.ownerJid),
+    hasProfileName: Boolean(instanciaDetalhe?.profileName),
+  });
+
+  if (!statusResolvido.conectado && instanciaDetalhe?.disconnectionObject) {
+    try {
+      const parsed = JSON.parse(instanciaDetalhe.disconnectionObject) as {
+        error?: { data?: { attrs?: { type?: string } } };
+      };
+      const tipo = parsed.error?.data?.attrs?.type;
+      if (tipo === 'device_removed') {
+        motivoDesconexao =
+          'Sessao removida pelo WhatsApp. Isso pode acontecer por outro dispositivo conectado ou por instabilidade da versao atual da conexao.';
+      } else if (tipo) {
+        motivoDesconexao = `Desconectado: ${tipo}`;
+      }
+    } catch {
+      /* ignora */
+    }
+  }
+
   return {
     instance: alvo.instancia,
-    state,
-    conectado,
+    state: statusResolvido.state,
+    conectado: statusResolvido.conectado,
     motivoDesconexao,
-    podeEnviar: conectado,
+    podeEnviar: statusResolvido.conectado,
     alvo: alvo.nomeLogico,
     origem: alvo.origem,
     servidor: servidorVisivel(alvo.url),

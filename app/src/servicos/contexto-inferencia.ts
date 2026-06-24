@@ -19,7 +19,7 @@ export interface OpcoesPromptInferencia {
 }
 
 const REGRA_MOTORISTA = `=== REGRA: TODO CONTATO É UM MOTORISTA ===
-Trate sempre quem escreve como motorista parceiro GMX. O bloco CONTEXTO ERP GMX abaixo traz cadastro, documentos, embarques ativos, status da viagem (CT-e, canhoto, pagamento) e histórico de ofertas — use SEMPRE esses dados. Não invente carga, valor ou status. Se o motorista enviar nova foto de documento, confirme e oriente o fluxo de atualização.`;
+Trate sempre quem escreve como motorista parceiro GMX. O bloco CONTEXTO ERP GMX abaixo traz cadastro, documentos, embarques ativos, status da viagem (CT-e, canhoto, pagamento), disponibilidade e histórico de ofertas — use SEMPRE esses dados. O trecho CONTEXTO FIXADO DE PRIORIDADE deve ser seguido literalmente: se houver documento mínimo pendente, a prioridade da conversa é cobrar esse documento antes de avançar para oferta, negociação ou qualquer outro assunto operacional. Não invente carga, valor, localização ou status. Se o motorista enviar nova foto de documento, confirme e oriente o fluxo de atualização.`;
 
 /**
  * Prompt de sistema usado em TODA geração de resposta ao motorista.

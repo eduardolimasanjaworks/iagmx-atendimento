@@ -138,7 +138,11 @@
       if (ok) return;
       const data = await state.json('/api/whatsapp/qrcode');
       if (data.cooldownAte) iniciarCooldown('qr', data.cooldownAte, data.cooldownMs || state.cooldownMs.qr);
-      if (data.conectado) return setLinha('Esse numero ja aparece conectado por aqui.', 'ok');
+      if (data.conectado) {
+        await verificarStatus();
+        return setLinha('Esse numero ja aparece conectado por aqui.', 'ok');
+      }
+      if (!data.base64) return setLinha('Nao recebi um QR valido dessa sessao agora.', 'warn');
       mostrarQr(data.base64);
       setLinha('QR pronto. Pode escanear que eu acompanho daqui.', 'ok');
       iniciarPoll();
@@ -158,6 +162,11 @@
     try {
       const data = await state.json('/api/whatsapp/reconectar', { method: 'POST' });
       if (data.cooldownAte) iniciarCooldown('reconectar', data.cooldownAte, data.cooldownMs || state.cooldownMs.reconectar);
+      if (data.conectado) {
+        await verificarStatus();
+        return setLinha('A sessao voltou conectada sem precisar abrir um novo QR.', 'ok');
+      }
+      if (!data.base64) return setLinha('Nao recebi um novo QR dessa sessao.', 'warn');
       mostrarQr(data.base64);
       state.conectado = false;
       setLinha('Sessao reiniciada. QR novo gerado.', 'ok');
