@@ -224,11 +224,15 @@ export async function registrarDisponibilidade(dados: {
 
   let registro: Record<string, unknown>;
   if (ultimos[0]?.id) {
+    payload.date_updated = new Date().toISOString();
     registro = (await directusPatch('disponivel', ultimos[0].id as number, payload)) as Record<
       string,
       unknown
     >;
   } else {
+    const now = new Date().toISOString();
+    payload.date_created = now;
+    payload.date_updated = now;
     registro = (await directusPost('disponivel', payload)) as Record<string, unknown>;
   }
 
