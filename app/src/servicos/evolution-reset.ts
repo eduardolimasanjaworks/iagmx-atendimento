@@ -68,6 +68,11 @@ async function createAuxiliarAgain(alvo: AlvoWhatsapp) {
 }
 
 export async function obterQrCodeComResetDeterministico(alvo: AlvoWhatsapp): Promise<QrCodeResposta> {
+  const qrAtual = await connectQr(alvo).catch(() => ({ base64: null, pairingCode: null, count: 0 }));
+  if (qrAtual.base64 || qrAtual.pairingCode) {
+    return qrAtual;
+  }
+
   await logoutIfPossible(alvo);
   await sleep(1200);
 
