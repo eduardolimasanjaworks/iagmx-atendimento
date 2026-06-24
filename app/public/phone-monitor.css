@@ -17,6 +17,11 @@
   overflow: hidden;
 }
 
+.monitor-switch {
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
 .chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -103,6 +108,12 @@
   gap: .8rem;
   padding-bottom: .8rem;
   border-bottom: 2px solid var(--line);
+}
+
+.contact-inline-meta {
+  margin-top: .45rem;
+  font-size: .82rem;
+  color: var(--muted);
 }
 
 .chat-focus-btn {

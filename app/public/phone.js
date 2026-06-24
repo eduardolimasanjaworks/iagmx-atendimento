@@ -162,7 +162,12 @@
       const data = await IagmxPainelAuth.json('/api/monitor/contatos-erp');
       state.contactsByPhone = new Map((data.contatos || []).map((item) => [item.telefone, item]));
       els.phoneSuggestions.innerHTML = (data.contatos || []).map((item) => `<option value="${item.telefone}">${escapeHtml(item.label || item.nome || item.telefone)}</option>`).join('');
-    } catch {}
+    } catch {
+      try {
+        const data = await IagmxPainelAuth.json('/api/monitor/telefones-ativos');
+        els.phoneSuggestions.innerHTML = (data.telefones || []).map((phone) => `<option value="${phone}"></option>`).join('');
+      } catch {}
+    }
   }
 
   async function carregar(forcePhones) {
