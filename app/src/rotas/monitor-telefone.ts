@@ -10,6 +10,7 @@ import { obterDebounceContato } from '../servicos/debounce.js';
 import { obterEstadoMonitorTelefone } from '../servicos/monitor-telefone.js';
 import { listarTracesRecentes } from '../servicos/trace-pipeline.js';
 import { listarContatosMonitorErp } from '../servicos/monitor-contatos-erp.js';
+import { obterEstadoAtendimentoErp } from '../servicos/erp-atendimento-motorista.js';
 import { painelAutenticado } from '../servicos/painel-acesso.js';
 import {
   jidEhGrupoOuLista,
@@ -220,6 +221,7 @@ function montarResumoAtual(opts: {
   debounce: Awaited<ReturnType<typeof obterDebounceContato>>;
   filaTelefone: Awaited<ReturnType<typeof listarRespostasPendentes>>;
   estadoEnvio: Awaited<ReturnType<typeof obterEstadoMonitorTelefone>>;
+  atendimento: Awaited<ReturnType<typeof obterEstadoAtendimentoErp>>;
 }): ResumoMonitorTelefone {
   if (opts.estadoEnvio?.fase === 'aguardando_atraso_inicial') {
     return {
@@ -258,6 +260,15 @@ function montarResumoAtual(opts: {
       delaySorteadoMs: opts.debounce.aguardandoMs,
       delaySorteadoSegundos: Math.max(0, Math.ceil(opts.debounce.aguardandoMs / 1000)),
       observacao: 'A IA ainda esta juntando mensagens antes de processar o lote',
+    };
+  }
+
+  const motivoAtendimento =
+    opts.atendimento.estado.precisa_atendimento_motivo || opts.atendimento.estado.ia_pausa_motivo;
+  if (opts.atendimento.estado.precisa_atendimento || opts.atendimento.estado.ia_pausada) {
+    return {
+      estadoAtual: 'IA pausada para ajuda humana',
+      observacao: motivoAtendimento || 'A conversa foi escalada para atendimento humano',
     };
   }
 
@@ -327,12 +338,13 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
     }
 
     const remoteJid = telefoneParaJid(telefone);
-    const [historico, pendentes, debounce, estadoEnvio, traces] = await Promise.all([
+    const [historico, pendentes, debounce, estadoEnvio, traces, atendimento] = await Promise.all([
       obterHistoricoBruto(remoteJid),
       listarRespostasPendentes(100),
       obterDebounceContato(remoteJid),
       obterEstadoMonitorTelefone(telefone),
       listarTracesRecentes(80),
+      obterEstadoAtendimentoErp(telefone),
     ]);
     // #region debug-point E:monitor-load
     if (telefone === '5512997918525') fetch('http://2.24.201.28:7777/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'chat-no-response-8525',runId:'pre-fix',hypothesisId:'E',location:'monitor-telefone.ts:337',msg:'[DEBUG] monitor carregou snapshot do telefone alvo',data:{telefone,remoteJid,historico:historico.length,pendentes:pendentes.filter((item)=>item.telefone===telefone).length,debounce:debounce ? debounce.itens.length : 0,estadoEnvio:estadoEnvio?.fase ?? null,traces:traces.filter((trace)=>trace.telefone===telefone).length,ultimosPapeis:historico.slice(-6).map((item)=>item.papel)},ts:Date.now()})}).catch(()=>{});
@@ -476,6 +488,27 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
       );
     }
 
+    const motivoAtendimento =
+      atendimento.estado.precisa_atendimento_motivo || atendimento.estado.ia_pausa_motivo;
+    if (
+      motivoAtendimento &&
+      !debounce &&
+      !filaTelefone.length &&
+      !estadoEnvio
+    ) {
+      linhas.push(
+        novaLinha(
+          telefone,
+          Date.now(),
+          'sistema',
+          `IA pausada e aguardando atendimento humano\n${motivoAtendimento}`,
+          'atendimento_humano',
+          'aguardando humano',
+          { variante: 'erp' },
+        ),
+      );
+    }
+
     const semCronometroAtivo = !debounce && !filaTelefone.some((item) => item.agendadoPara) && !estadoEnvio;
     for (const trace of tracesContato) {
       const ultimaEtapa = trace.etapas[trace.etapas.length - 1];
@@ -553,6 +586,7 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
       debounce,
       filaTelefone,
       estadoEnvio,
+      atendimento,
     });
     return {
       build: config.buildId,
