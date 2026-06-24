@@ -34,6 +34,7 @@ import {
   parseDataLiberacao,
   tentarFluxoDisponibilidade,
 } from '../servicos/fluxo-disponibilidade.js';
+import { avaliarNegociacao } from '../servicos/motor-negociacao.js';
 import { executarTestesDisparosProativos } from './auto-teste-disparos.js';
 
 export interface ResultadoTeste {
@@ -307,6 +308,36 @@ export async function executarTestesUnidade(): Promise<ResultadoTeste[]> {
       carregadoDisponibilidadeEstadoSemCidade?.passo === 'local_disponibilidade_estado_sem_cidade' &&
         carregadoDisponibilidadeEstadoSemCidade.visivel.includes('cidade em Alagoas'),
       JSON.stringify(carregadoDisponibilidadeEstadoSemCidade),
+    ),
+  );
+
+  const perguntaAumento = avaliarNegociacao({
+    mensagem: 'o quanto voce pode aumentar pra mim?',
+    faixa: {
+      origem: 'Ball - Cabo De Santo Agostinho',
+      destino: 'F. Belém',
+      valorOfertado: 11200,
+      valorMinimo: 11200,
+      valorMaximo: 11800,
+      fonte: 'config_rotas',
+    },
+    estado: {
+      rodadas: 0,
+      faixa: {
+        origem: 'Ball - Cabo De Santo Agostinho',
+        destino: 'F. Belém',
+        valorOfertado: 11200,
+        valorMinimo: 11200,
+        valorMaximo: 11800,
+        fonte: 'config_rotas',
+      },
+    },
+  });
+  r.push(
+    assert(
+      'negociacao responde teto quando motorista pergunta quanto pode aumentar',
+      perguntaAumento.tipo === 'reprompt' && perguntaAumento.mensagem.includes('R$ 11.800'),
+      JSON.stringify(perguntaAumento),
     ),
   );
 

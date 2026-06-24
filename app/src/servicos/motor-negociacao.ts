@@ -179,6 +179,13 @@ function formatarValor(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function perguntouFaixaOuAumento(mensagem: string): boolean {
+  const t = mensagem.toLowerCase();
+  return /\b(quanto\s+voce\s+pode\s+aumentar|quanto\s+da\s+pra\s+aumentar|qual\s+o\s+maximo|ate\s+quanto\s+voce\s+chega|qual\s+o\s+melhor\s+valor|tem\s+como\s+melhorar)\b/.test(
+    t,
+  );
+}
+
 export function motoristaRecusou(mensagem: string): boolean {
   const t = mensagem.toLowerCase();
   return /\b(n[aã]o\s+rola|recuso|sem\s+interesse|n[aã]o\s+topo|passo|muito\s+longe|to\s+longe)\b/.test(
@@ -314,6 +321,19 @@ export function avaliarNegociacao(opts: {
             : faixa.valorMaximo;
 
     return { tipo: 'aceite', valorAceito: candidato };
+  }
+
+  if (perguntouFaixaOuAumento(mensagem)) {
+    if (faixa.valorMaximo > faixa.valorOfertado) {
+      return {
+        tipo: 'reprompt',
+        mensagem: `Consigo melhorar ate R$ ${formatarValor(faixa.valorMaximo)} parceiro, se topar eu ja confirmo aqui`,
+      };
+    }
+    return {
+      tipo: 'reprompt',
+      mensagem: `Nesse valor eu ja estou no maximo da rota parceiro, topa os R$ ${formatarValor(faixa.valorOfertado)}?`,
+    };
   }
 
   if (/\b(interesse|to\s+em|estou\s+em|por\s+aqui)\b/i.test(mensagem) && !valorMsg) {

@@ -29,3 +29,6 @@
 ## Fix Applied
 - `buscarConfigRota()` agora faz fallback deterministico por `origem + destino + operacao` quando existir um unico candidato e a diferenca for apenas `capacidade` ausente na mensagem.
 - `escalonar_negociacao` nao converte mais um escalonamento ja executado em erro fatal so porque `historico_ofertas` nao confirmou o `evento_id` a tempo.
+
+- Apos o fix, a mesma pergunta passou a casar a rota `id=23` e o motor C9 respondeu de forma programatica, sem handoff.
+- O pedido `o quanto voce pode aumentar pra mim?` agora consulta a faixa e informa o teto da rota quando houver margem acima da oferta inicial.
