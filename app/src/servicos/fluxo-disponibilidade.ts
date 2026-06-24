@@ -31,6 +31,8 @@ interface EstadoC7 {
     | 'carregado_local_disponibilidade';
   localizacaoAtual?: string;
   dataPrevisaoDisponibilidade?: string;
+  latitudeAtual?: number;
+  longitudeAtual?: number;
 }
 
 type ContextoC7 =
@@ -38,18 +40,32 @@ type ContextoC7 =
   | { tipo: 'aguardando_status' }
   | { tipo: 'vazio_localizacao' }
   | { tipo: 'indisponivel_local_atual' }
-  | { tipo: 'indisponivel_data'; localizacaoAtual: string }
+  | {
+      tipo: 'indisponivel_data';
+      localizacaoAtual: string;
+      latitudeAtual?: number;
+      longitudeAtual?: number;
+    }
   | {
       tipo: 'indisponivel_local_disponibilidade';
       localizacaoAtual: string;
       dataPrevisaoDisponibilidade: string;
+      latitudeAtual?: number;
+      longitudeAtual?: number;
     }
   | { tipo: 'carregado_local_atual' }
-  | { tipo: 'carregado_data'; localizacaoAtual: string }
+  | {
+      tipo: 'carregado_data';
+      localizacaoAtual: string;
+      latitudeAtual?: number;
+      longitudeAtual?: number;
+    }
   | {
       tipo: 'carregado_local_disponibilidade';
       localizacaoAtual: string;
       dataPrevisaoDisponibilidade: string;
+      latitudeAtual?: number;
+      longitudeAtual?: number;
     };
 
 function normalizar(s: string): string {
@@ -301,6 +317,27 @@ function extrairLocalAtualDoHistorico(
   return null;
 }
 
+async function resolverLocalizacaoComGps(
+  mensagem: string,
+  itens: ItemDebounce[],
+): Promise<{ localizacao: string; latitude?: number; longitude?: number } | null> {
+  const coords = extrairGpsDosItens(mensagem, itens);
+  if (coords) {
+    const resolvido = await resolverCidadePorGps(coords);
+    if (resolvido) {
+      return {
+        localizacao: resolvido.localizacao,
+        latitude: resolvido.latitude,
+        longitude: resolvido.longitude,
+      };
+    }
+  }
+
+  const localizacao = extrairLocalizacaoTexto(mensagem);
+  if (!localizacao) return null;
+  return { localizacao };
+}
+
 function extrairDataDoHistorico(historico: Array<{ role: string; content: string }>): string | null {
   for (const h of [...historico].reverse()) {
     if (h.role !== 'user') continue;
@@ -348,7 +385,12 @@ export async function tentarFluxoDisponibilidade(opts: {
     if (estadoRedis.passo === 'vazio_local') contexto = { tipo: 'vazio_localizacao' };
     if (estadoRedis.passo === 'indisponivel_local_atual') contexto = { tipo: 'indisponivel_local_atual' };
     if (estadoRedis.passo === 'indisponivel_data' && estadoRedis.localizacaoAtual) {
-      contexto = { tipo: 'indisponivel_data', localizacaoAtual: estadoRedis.localizacaoAtual };
+      contexto = {
+        tipo: 'indisponivel_data',
+        localizacaoAtual: estadoRedis.localizacaoAtual,
+        latitudeAtual: estadoRedis.latitudeAtual,
+        longitudeAtual: estadoRedis.longitudeAtual,
+      };
     }
     if (
       estadoRedis.passo === 'indisponivel_local_disponibilidade' &&
@@ -359,11 +401,18 @@ export async function tentarFluxoDisponibilidade(opts: {
         tipo: 'indisponivel_local_disponibilidade',
         localizacaoAtual: estadoRedis.localizacaoAtual,
         dataPrevisaoDisponibilidade: estadoRedis.dataPrevisaoDisponibilidade,
+        latitudeAtual: estadoRedis.latitudeAtual,
+        longitudeAtual: estadoRedis.longitudeAtual,
       };
     }
     if (estadoRedis.passo === 'carregado_local_atual') contexto = { tipo: 'carregado_local_atual' };
     if (estadoRedis.passo === 'carregado_data' && estadoRedis.localizacaoAtual) {
-      contexto = { tipo: 'carregado_data', localizacaoAtual: estadoRedis.localizacaoAtual };
+      contexto = {
+        tipo: 'carregado_data',
+        localizacaoAtual: estadoRedis.localizacaoAtual,
+        latitudeAtual: estadoRedis.latitudeAtual,
+        longitudeAtual: estadoRedis.longitudeAtual,
+      };
     }
     if (
       estadoRedis.passo === 'carregado_local_disponibilidade' &&
@@ -374,6 +423,8 @@ export async function tentarFluxoDisponibilidade(opts: {
         tipo: 'carregado_local_disponibilidade',
         localizacaoAtual: estadoRedis.localizacaoAtual,
         dataPrevisaoDisponibilidade: estadoRedis.dataPrevisaoDisponibilidade,
+        latitudeAtual: estadoRedis.latitudeAtual,
+        longitudeAtual: estadoRedis.longitudeAtual,
       };
     }
     if (estadoRedis.passo === 'status') contexto = { tipo: 'aguardando_status' };
@@ -398,11 +449,16 @@ export async function tentarFluxoDisponibilidade(opts: {
       return montarResultado(msgs.c7_pede_localizacao, undefined, 'pede_local');
     }
     if (ehIndisponivel(mensagem)) {
-      const localizacaoAtual = extrairLocalizacaoTexto(mensagem);
-      if (localizacaoAtual && !localizacaoVaga(mensagem)) {
+      const localAtual = await resolverLocalizacaoComGps(mensagem, itens);
+      if (localAtual && !localizacaoVaga(mensagem)) {
         await salvarEstadoFluxo(
           telefone,
-          { passo: 'indisponivel_data', localizacaoAtual } satisfies EstadoC7,
+          {
+            passo: 'indisponivel_data',
+            localizacaoAtual: localAtual.localizacao,
+            latitudeAtual: localAtual.latitude,
+            longitudeAtual: localAtual.longitude,
+          } satisfies EstadoC7,
         );
         return montarResultado(msgs.c7_pergunta_data, undefined, 'pede_data_indisponivel');
       }
@@ -420,31 +476,8 @@ export async function tentarFluxoDisponibilidade(opts: {
       return montarResultado(msgs.c7_local_invalida, undefined, 'local_invalida');
     }
 
-    const coords = extrairGpsDosItens(mensagem, itens);
-    if (coords) {
-      const resolvido = await resolverCidadePorGps(coords);
-      if (resolvido) {
-        await limparEstadoFluxo(telefone);
-        return montarResultado(
-          msgs.c7_fechamento,
-          {
-            ferramenta: 'registrar_disponibilidade',
-            dados: {
-              disponivel: true,
-              status: 'disponivel',
-              localizacao_atual: resolvido.localizacao,
-              latitude: resolvido.latitude,
-              longitude: resolvido.longitude,
-              telefone,
-            },
-          },
-          'vazio_gps_concluido',
-        );
-      }
-    }
-
-    const local = extrairLocalizacaoTexto(mensagem);
-    if (!local) {
+    const localAtual = await resolverLocalizacaoComGps(mensagem, itens);
+    if (!localAtual) {
       return montarResultado(msgs.c7_local_invalida, undefined, 'local_invalida');
     }
     await limparEstadoFluxo(telefone);
@@ -455,22 +488,29 @@ export async function tentarFluxoDisponibilidade(opts: {
         dados: {
           disponivel: true,
           status: 'disponivel',
-          localizacao_atual: local,
+          localizacao_atual: localAtual.localizacao,
+          latitude: localAtual.latitude,
+          longitude: localAtual.longitude,
           telefone,
         },
       },
-      'vazio_concluido',
+      localAtual.latitude != null && localAtual.longitude != null ? 'vazio_gps_concluido' : 'vazio_concluido',
     );
   }
 
   if (contexto.tipo === 'indisponivel_local_atual') {
-    const localizacaoAtual = extrairLocalizacaoTexto(mensagem);
-    if (!localizacaoAtual || localizacaoVaga(mensagem)) {
+    const localAtual = await resolverLocalizacaoComGps(mensagem, itens);
+    if (!localAtual || localizacaoVaga(mensagem)) {
       return montarResultado(msgs.c7_local_invalida, undefined, 'local_indisponivel_invalida');
     }
     await salvarEstadoFluxo(
       telefone,
-      { passo: 'indisponivel_data', localizacaoAtual } satisfies EstadoC7,
+      {
+        passo: 'indisponivel_data',
+        localizacaoAtual: localAtual.localizacao,
+        latitudeAtual: localAtual.latitude,
+        longitudeAtual: localAtual.longitude,
+      } satisfies EstadoC7,
     );
     return montarResultado(msgs.c7_pergunta_data, undefined, 'pede_data_indisponivel');
   }
@@ -489,6 +529,8 @@ export async function tentarFluxoDisponibilidade(opts: {
         passo: 'indisponivel_local_disponibilidade',
         localizacaoAtual: contexto.localizacaoAtual,
         dataPrevisaoDisponibilidade: dataIso,
+        latitudeAtual: contexto.latitudeAtual,
+        longitudeAtual: contexto.longitudeAtual,
       } satisfies EstadoC7,
     );
     return montarResultado(
@@ -518,6 +560,8 @@ export async function tentarFluxoDisponibilidade(opts: {
           localizacao_atual: contexto.localizacaoAtual,
           local_disponibilidade: localDisponibilidade,
           data_previsao_disponibilidade: contexto.dataPrevisaoDisponibilidade,
+          latitude: contexto.latitudeAtual,
+          longitude: contexto.longitudeAtual,
           telefone,
         },
       },
@@ -526,13 +570,18 @@ export async function tentarFluxoDisponibilidade(opts: {
   }
 
   if (contexto.tipo === 'carregado_local_atual') {
-    const localizacaoAtual = extrairLocalizacaoTexto(mensagem);
-    if (!localizacaoAtual || localizacaoVaga(mensagem)) {
+    const localAtual = await resolverLocalizacaoComGps(mensagem, itens);
+    if (!localAtual || localizacaoVaga(mensagem)) {
       return montarResultado(msgs.c7_local_invalida, undefined, 'local_atual_invalida');
     }
     await salvarEstadoFluxo(
       telefone,
-      { passo: 'carregado_data', localizacaoAtual } satisfies EstadoC7,
+      {
+        passo: 'carregado_data',
+        localizacaoAtual: localAtual.localizacao,
+        latitudeAtual: localAtual.latitude,
+        longitudeAtual: localAtual.longitude,
+      } satisfies EstadoC7,
     );
     return montarResultado(msgs.c7_pergunta_data, undefined, 'pede_data');
   }
@@ -551,6 +600,8 @@ export async function tentarFluxoDisponibilidade(opts: {
         passo: 'carregado_local_disponibilidade',
         localizacaoAtual: contexto.localizacaoAtual,
         dataPrevisaoDisponibilidade: dataIso,
+        latitudeAtual: contexto.latitudeAtual,
+        longitudeAtual: contexto.longitudeAtual,
       } satisfies EstadoC7,
     );
     return montarResultado(
@@ -580,6 +631,8 @@ export async function tentarFluxoDisponibilidade(opts: {
           localizacao_atual: contexto.localizacaoAtual,
           local_disponibilidade: localDisponibilidade,
           data_previsao_disponibilidade: contexto.dataPrevisaoDisponibilidade,
+          latitude: contexto.latitudeAtual,
+          longitude: contexto.longitudeAtual,
           telefone,
         },
       },

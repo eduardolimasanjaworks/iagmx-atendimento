@@ -169,7 +169,9 @@ const FLUXOS = [
       { motorista: 'indo pro Rio de Janeiro RJ' },
       { validar: { deveConter: ['data', 'liber'] } },
       { motorista: 'libero sexta-feira' },
-      { validar: { esperaFerramenta: 'registrar_disponibilidade' } },
+      { validar: { deveConter: ['cidade', 'estado', 'disponível'] } },
+      { motorista: 'Betim MG' },
+      { validar: { esperaFerramenta: 'registrar_disponibilidade', deveConter: ['dados atualizados', 'boa viagem', 'show'] } },
     ],
   },
   {

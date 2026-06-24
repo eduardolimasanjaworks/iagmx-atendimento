@@ -3,6 +3,8 @@
  */
 import { config } from '../config.js';
 
+let baseUrlAtiva: string | null = null;
+
 const headersJson = () => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${config.directusToken}`,
@@ -12,14 +14,71 @@ export function directusConfigurado(): boolean {
   return Boolean(config.directusUrl && config.directusToken);
 }
 
-function url(caminho: string): string {
-  return `${config.directusUrl}${caminho.startsWith('/') ? caminho : `/${caminho}`}`;
+function url(baseUrl: string, caminho: string): string {
+  return `${baseUrl}${caminho.startsWith('/') ? caminho : `/${caminho}`}`;
+}
+
+function urlsCandidatas(): string[] {
+  const primaria = String(config.directusUrl || '').trim().replace(/\/+$/, '');
+  if (!primaria) return [];
+  const candidatas = [primaria];
+
+  try {
+    const parsed = new URL(primaria);
+    if (parsed.hostname === 'gmx_app') {
+      candidatas.push(`${parsed.protocol}//127.0.0.1:8057`);
+      candidatas.push(`${parsed.protocol}//localhost:8057`);
+    }
+  } catch {
+    return [primaria];
+  }
+
+  return [...new Set(candidatas)];
+}
+
+async function fetchDirectus(caminho: string, init: RequestInit): Promise<Response> {
+  if (!directusConfigurado()) throw new Error('Directus não configurado');
+  const bases = baseUrlAtiva ? [baseUrlAtiva, ...urlsCandidatas().filter((item) => item !== baseUrlAtiva)] : urlsCandidatas();
+  let ultimoErro: unknown;
+
+  for (const base of bases) {
+    try {
+      const res = await fetch(url(base, caminho), init);
+      baseUrlAtiva = base;
+      return res;
+    } catch (err) {
+      ultimoErro = err;
+    }
+  }
+
+  throw ultimoErro instanceof Error ? ultimoErro : new Error('Falha ao conectar no Directus');
+}
+
+async function obterBaseUrlAtiva(): Promise<string> {
+  if (baseUrlAtiva) return baseUrlAtiva;
+  const bases = urlsCandidatas();
+  if (!bases.length) throw new Error('Directus não configurado');
+  for (const base of bases) {
+    try {
+      const res = await fetch(url(base, '/server/ping'), { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        baseUrlAtiva = base;
+        return base;
+      }
+    } catch {
+      // tenta próxima
+    }
+  }
+  return bases[0];
 }
 
 /** GET genérico na API Directus */
 export async function directusGet<T = unknown>(caminho: string): Promise<T> {
   if (!directusConfigurado()) throw new Error('Directus não configurado');
-  const res = await fetch(url(caminho), { headers: headersJson(), signal: AbortSignal.timeout(30000) });
+  const res = await fetchDirectus(caminho, {
+    headers: headersJson(),
+    signal: AbortSignal.timeout(30000),
+  });
   if (!res.ok) throw new Error(`Directus GET falhou (${res.status}): ${await res.text()}`);
   return res.json() as Promise<T>;
 }
@@ -40,7 +99,7 @@ export async function directusPost<T = unknown>(
   dados: Record<string, unknown>,
 ): Promise<T> {
   if (!directusConfigurado()) throw new Error('Directus não configurado');
-  const res = await fetch(url(`/items/${colecao}`), {
+  const res = await fetchDirectus(`/items/${colecao}`, {
     method: 'POST',
     headers: headersJson(),
     body: JSON.stringify(dados),
@@ -58,7 +117,7 @@ export async function directusPatch<T = unknown>(
   dados: Record<string, unknown>,
 ): Promise<T> {
   if (!directusConfigurado()) throw new Error('Directus não configurado');
-  const res = await fetch(url(`/items/${colecao}/${id}`), {
+  const res = await fetchDirectus(`/items/${colecao}/${id}`, {
     method: 'PATCH',
     headers: headersJson(),
     body: JSON.stringify(dados),
@@ -80,7 +139,7 @@ export async function directusUploadArquivo(
   const blob = new Blob([new Uint8Array(buffer)], { type: mimetype });
   form.append('file', blob, fileName);
 
-  const res = await fetch(url('/files'), {
+  const res = await fetchDirectus('/files', {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.directusToken}` },
     body: form,
@@ -93,13 +152,15 @@ export async function directusUploadArquivo(
 
 /** URL pública do asset no Directus */
 export function directusAssetUrl(fileId: string): string {
-  return `${config.directusUrl}/assets/${fileId}`;
+  const base = baseUrlAtiva || String(config.directusUrl || '').trim().replace(/\/+$/, '');
+  return `${base}/assets/${fileId}`;
 }
 
 export async function verificarDirectus(): Promise<boolean> {
   if (!directusConfigurado()) return false;
   try {
-    const res = await fetch(url('/server/ping'), { signal: AbortSignal.timeout(5000) });
+    const base = await obterBaseUrlAtiva();
+    const res = await fetch(url(base, '/server/ping'), { signal: AbortSignal.timeout(5000) });
     return res.ok;
   } catch {
     return false;
