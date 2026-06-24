@@ -26,6 +26,8 @@ interface LinhaMonitorTelefone {
   mensagem: string;
   tipo: string;
   status: string;
+  variante?: 'chat' | 'previsto' | 'erp' | 'sistema';
+  previstoParaMs?: number;
 }
 
 interface ResumoMonitorTelefone {
@@ -84,6 +86,7 @@ function novaLinha(
   mensagem: string,
   tipo: string,
   status: string,
+  extras?: Partial<Pick<LinhaMonitorTelefone, 'variante' | 'previstoParaMs'>>,
 ): LinhaMonitorTelefone {
   return {
     horarioMs,
@@ -93,6 +96,70 @@ function novaLinha(
     mensagem,
     tipo,
     status,
+    variante: extras?.variante,
+    previstoParaMs: extras?.previstoParaMs,
+  };
+}
+
+function resumoFerramenta(
+  nome: string,
+  dados?: Record<string, unknown>,
+): { mensagem: string; tipo: string } {
+  const safe = dados || {};
+  if (nome === 'registrar_disponibilidade') {
+    const partes = [
+      `Disponibilidade validada para gravacao`,
+      safe.status ? `status ${String(safe.status)}` : null,
+      safe.localizacao_atual ? `local atual ${String(safe.localizacao_atual)}` : null,
+      safe.local_disponibilidade ? `local previsto ${String(safe.local_disponibilidade)}` : null,
+      safe.data_previsao_disponibilidade
+        ? `libera em ${String(safe.data_previsao_disponibilidade)}`
+        : null,
+      safe.latitude != null && safe.longitude != null
+        ? `lat/lon ${String(safe.latitude)}, ${String(safe.longitude)}`
+        : null,
+    ].filter(Boolean);
+    return { mensagem: partes.join(' · '), tipo: 'erp_disponibilidade' };
+  }
+  if (nome === 'atualizar_motorista') {
+    return {
+      mensagem: `Cadastro principal atualizado · ${JSON.stringify(safe).slice(0, 240)}`,
+      tipo: 'erp_cadastro',
+    };
+  }
+  if (nome === 'grava_ocr') {
+    return {
+      mensagem: `Documento enviado para revisao/gravação · ${JSON.stringify(safe).slice(0, 240)}`,
+      tipo: 'erp_ocr',
+    };
+  }
+  if (nome === 'grava_comprovante') {
+    return {
+      mensagem: `Arquivo operacional vinculado no banco · ${JSON.stringify(safe).slice(0, 240)}`,
+      tipo: 'erp_arquivo',
+    };
+  }
+  if (nome === 'salvar_carreta') {
+    return {
+      mensagem: `Dados do veiculo atualizados · ${JSON.stringify(safe).slice(0, 240)}`,
+      tipo: 'erp_veiculo',
+    };
+  }
+  if (nome === 'resposta_oferta_carga') {
+    return {
+      mensagem: `Resposta de oferta registrada · ${JSON.stringify(safe).slice(0, 240)}`,
+      tipo: 'erp_oferta',
+    };
+  }
+  if (nome === 'escalonar_negociacao') {
+    return {
+      mensagem: `Escalonamento operacional criado · ${JSON.stringify(safe).slice(0, 240)}`,
+      tipo: 'erp_escalonamento',
+    };
+  }
+  return {
+    mensagem: `Ferramenta executada · ${nome} · ${JSON.stringify(safe).slice(0, 240)}`,
+    tipo: 'erp_ferramenta',
   };
 }
 
@@ -288,6 +355,7 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
               justificativa,
               'justificativa_ia',
               'explicacao do envio',
+              { variante: 'sistema' },
             ),
           );
         }
@@ -304,6 +372,7 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
             item.conteudo,
             item.tipo,
             formatarStatusTemporizado('esperando debounce por mais', Date.now() + debounce.aguardandoMs),
+            { variante: 'sistema' },
           ),
         );
       }
@@ -315,6 +384,7 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
           'Lote recebido e segurado para evitar resposta imediata',
           'debounce',
           formatarStatusTemporizado('esperando', Date.now() + debounce.aguardandoMs),
+          { variante: 'sistema', previstoParaMs: Date.now() + debounce.aguardandoMs },
         ),
       );
     }
@@ -329,9 +399,11 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
           )
         : `na fila: ${item.motivo || 'canal indisponivel'}`;
       const mensagem =
-        item.tipoFila === 'atraso_humanizado'
-          ? `Resposta aguardando o atraso inicial persistido desde ${formatarHoraBrasilia(item.criadoEm)}`
-          : item.texto;
+        item.texto?.trim()
+          ? item.texto
+          : item.tipoFila === 'atraso_humanizado'
+            ? `Resposta aguardando o atraso inicial persistido desde ${formatarHoraBrasilia(item.criadoEm)}`
+            : 'Resposta aguardando na fila';
       linhas.push(
         novaLinha(
           telefone,
@@ -340,6 +412,7 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
           mensagem,
           item.tipoFila === 'atraso_humanizado' ? 'atraso_inicial' : 'fila',
           status,
+          { variante: 'previsto', previstoParaMs: item.agendadoPara },
         ),
       );
     }
@@ -377,6 +450,15 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
           mensagemEstado,
           estadoEnvio.fase,
           status,
+          {
+            variante:
+              ['aguardando_atraso_inicial', 'pausa_fragmento', 'digitando', 'fila_pendente'].includes(
+                estadoEnvio.fase,
+              )
+                ? 'previsto'
+                : 'sistema',
+            previstoParaMs: estadoEnvio.ateMs,
+          },
         ),
       );
     }
@@ -399,6 +481,22 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
         ),
       );
       for (const etapa of trace.etapas.slice(-6)) {
+        const nomeFerramenta = String(etapa.detalhe?.ferramenta ?? '');
+        if (etapa.etapa === 'ferramenta' && nomeFerramenta) {
+          const resumo = resumoFerramenta(nomeFerramenta, etapa.detalhe?.dados as Record<string, unknown>);
+          linhas.push(
+            novaLinha(
+              telefone,
+              etapa.ts,
+              'sistema',
+              resumo.mensagem,
+              resumo.tipo,
+              `ERP ${String(etapa.detalhe?.status || 'ok')}`,
+              { variante: 'erp' },
+            ),
+          );
+          continue;
+        }
         const detalhe = formatarDetalheTrace(etapa.detalhe);
         linhas.push(
           novaLinha(
@@ -408,6 +506,7 @@ export async function rotasMonitorTelefone(app: FastifyInstance): Promise<void> 
             detalhe ? `${etapa.rotulo}\n${detalhe}` : etapa.rotulo,
             `trace:${trace.id}:${etapa.etapa}`,
             `trace ${trace.id} · etapa ${etapa.ordem}`,
+            { variante: 'sistema' },
           ),
         );
       }

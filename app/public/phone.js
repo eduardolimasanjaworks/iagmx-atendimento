@@ -124,6 +124,7 @@
     preencherResumo();
     renderLinhas();
     atualizarUrl();
+    window.dispatchEvent(new CustomEvent('phone-monitor-updated'));
   }
 
   function adicionarTelefone(valor) {
@@ -247,6 +248,14 @@
     getPhone: () => telefoneFoco(),
     getPhones: () => [...state.phones],
     getContext: () => state.contexto,
+    getSnapshot() {
+      return {
+        activePhone: state.activePhone,
+        phones: [...state.phones],
+        lines: [...state.lines],
+        dataByPhone: [...state.dataByPhone.entries()].map(([phone, data]) => [phone, data]),
+      };
+    },
     setPhone(valor) {
       els.phoneInput.value = soDigitos(valor);
     },

@@ -414,7 +414,7 @@ async function processarLote(remoteJid: string): Promise<void> {
       resposta = rota.textoComFerramentas;
       enviarUmaBolha = rota.fragmentar === false;
       if (rota.executarFerramentas) {
-        resposta = await processarFerramentas(resposta, { remoteJid, instance, itens });
+        resposta = await processarFerramentas(resposta, { remoteJid, instance, itens, traceId });
       } else {
         resposta = rota.resposta;
       }
@@ -469,7 +469,7 @@ async function processarLote(remoteJid: string): Promise<void> {
           { cenario: rota.cenario ?? 6, preview: respostaBruta.slice(0, 120) },
           Date.now() - tGen,
         );
-        resposta = await processarFerramentas(respostaBruta, { remoteJid, instance, itens });
+        resposta = await processarFerramentas(respostaBruta, { remoteJid, instance, itens, traceId });
       } else {
         const promptSistema =
           rota.cenario !== undefined
@@ -578,7 +578,7 @@ async function processarLote(remoteJid: string): Promise<void> {
         }
 
         resposta = normalizarRespostaWhatsapp(respostaFinal);
-        resposta = await processarFerramentas(resposta, { remoteJid, instance, itens });
+        resposta = await processarFerramentas(resposta, { remoteJid, instance, itens, traceId });
 
         if (analise?.intencao_provavel) {
           void registrarIntencaoWhatsapp(numero, analise.intencao_provavel, {

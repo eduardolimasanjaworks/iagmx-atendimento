@@ -28,11 +28,13 @@ import {
   novoEventoHistoricoId,
   verificarHistoricoOfertaNoErp,
 } from './historico-ofertas-gmx.js';
+import { adicionarEtapa } from './trace-pipeline.js';
 
 export interface ContextoFerramenta {
   remoteJid: string;
   instance: string;
   itens: ItemDebounce[];
+  traceId?: string;
 }
 
 const FERRAMENTAS = [
@@ -324,6 +326,9 @@ async function executarFerramenta(
         status: dados.status as string | undefined,
         localizacao_atual: (dados.localizacao_atual ?? dados.local) as string | undefined,
         local_disponibilidade: dados.local_disponibilidade as string | undefined,
+        latitude: dados.latitude as number | undefined,
+        longitude: dados.longitude as number | undefined,
+        data_previsao_disponibilidade: dados.data_previsao_disponibilidade as string | undefined,
       });
 
       if (!verificacao.ok) {
@@ -480,9 +485,24 @@ export async function processarFerramentas(
     if (nome) {
       try {
         await executarFerramenta(nome, bloco.dados, ctx);
+        if (ctx.traceId) {
+          await adicionarEtapa(ctx.traceId, 'ferramenta', `Ferramenta ${nome} executada`, {
+            ferramenta: nome,
+            status: 'ok',
+            dados: bloco.dados,
+          });
+        }
       } catch (err) {
         houveErroFerramenta = true;
         console.error(`[ferramenta] Erro em ${bloco.ferramenta}:`, err);
+        if (ctx.traceId) {
+          await adicionarEtapa(ctx.traceId, 'ferramenta', `Ferramenta ${nome} falhou`, {
+            ferramenta: nome,
+            status: 'erro',
+            dados: bloco.dados,
+            erro: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     } else {
       logEvento('ferramenta', 'Ferramenta desconhecida ignorada', { nome: bloco.ferramenta }, 'warn');

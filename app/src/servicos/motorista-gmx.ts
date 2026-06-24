@@ -231,6 +231,9 @@ export async function verificarDisponibilidadeNoErp(
     localizacao_atual?: string;
     local_disponibilidade?: string;
     status?: string;
+    latitude?: number;
+    longitude?: number;
+    data_previsao_disponibilidade?: string;
   },
 ): Promise<{ ok: boolean; registro?: Record<string, unknown>; motivo?: string }> {
   const motorista = await buscarMotoristaPorTelefone(telefone);
@@ -278,6 +281,39 @@ export async function verificarDisponibilidadeNoErp(
         ok: false,
         registro,
         motivo: `local_disponibilidade ERP="${locErp}" não contém "${cidadeEsp}"`,
+      };
+    }
+  }
+
+  if (esperado.data_previsao_disponibilidade) {
+    const atual = String(registro.data_previsao_disponibilidade ?? '');
+    if (atual !== esperado.data_previsao_disponibilidade) {
+      return {
+        ok: false,
+        registro,
+        motivo: `data_previsao ERP="${atual}" esperado="${esperado.data_previsao_disponibilidade}"`,
+      };
+    }
+  }
+
+  if (esperado.latitude != null) {
+    const atual = Number(registro.latitude);
+    if (!Number.isFinite(atual) || Math.abs(atual - esperado.latitude) > 0.0001) {
+      return {
+        ok: false,
+        registro,
+        motivo: `latitude ERP=${String(registro.latitude)} esperado=${String(esperado.latitude)}`,
+      };
+    }
+  }
+
+  if (esperado.longitude != null) {
+    const atual = Number(registro.longitude);
+    if (!Number.isFinite(atual) || Math.abs(atual - esperado.longitude) > 0.0001) {
+      return {
+        ok: false,
+        registro,
+        motivo: `longitude ERP=${String(registro.longitude)} esperado=${String(esperado.longitude)}`,
       };
     }
   }
