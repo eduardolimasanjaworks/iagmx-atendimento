@@ -21,6 +21,7 @@ import { rotasPainelAuth } from './rotas/painel-auth.js';
 import { rotasMonitorTelefone } from './rotas/monitor-telefone.js';
 import { rotasJornadasTeste } from './rotas/jornadas-teste.js';
 import { rotasOcrDocumentos } from './rotas/ocr-documentos.js';
+import { rotasChatwootIaControle } from './rotas/chatwoot-ia-controle.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ORIGENS_CORS = new Set([
@@ -99,6 +100,7 @@ export async function criarServidor() {
   await app.register(rotasMonitorTelefone);
   await app.register(rotasJornadasTeste);
   await app.register(rotasOcrDocumentos);
+  await app.register(rotasChatwootIaControle);
 
   /** Atalho /whatsapp → página de QR */
   app.get('/whatsapp', async (_req, reply) => {

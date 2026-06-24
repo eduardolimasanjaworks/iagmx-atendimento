@@ -155,6 +155,7 @@ services:
       INFERENCIA_CONCORRENCIA_MAX: '4'
     volumes:
       - ./.env:/app/.env:ro
+      - ../.chatwootgmxtokenevolution.env:/app/.chatwootgmxtokenevolution.env:ro
       - "./prompt inicial para avaliarmos dificuldade:/app/prompt-inicial.txt:ro"
       - ./data:/app/data:ro
       - ../gmx/google-oauth-client.json:/app/secrets/google-oauth-client.json:ro
