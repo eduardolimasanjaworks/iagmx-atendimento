@@ -12,6 +12,13 @@ export interface ConfigRotaGmx {
   valor_minimo: number;
   valor_maximo: number;
   ativo?: boolean;
+  evidencia?: string | null;
+  regras_operacionais?: {
+    preferencia_proximidade?: 'agora' | 'coleta';
+    gps_max_horas?: number;
+    passo_negociacao_modo?: 'proporcional' | 'fixo';
+    passo_negociacao_valor?: number;
+  };
 }
 
 export interface TelefoneNotificacaoGmx {
@@ -37,6 +44,25 @@ function normalizar(s: string): string {
     .trim();
 }
 
+function parseRegrasRota(raw?: string | null): ConfigRotaGmx['regras_operacionais'] {
+  const texto = String(raw ?? '').trim();
+  if (!texto.startsWith('GMX_RULES::')) return {};
+  try {
+    const parsed = JSON.parse(texto.slice('GMX_RULES::'.length)) as Record<string, unknown>;
+    return {
+      preferencia_proximidade:
+        parsed.preferencia_proximidade === 'agora' ? 'agora' : parsed.preferencia_proximidade === 'coleta' ? 'coleta' : undefined,
+      gps_max_horas: Number.isFinite(Number(parsed.gps_max_horas)) ? Number(parsed.gps_max_horas) : undefined,
+      passo_negociacao_modo:
+        parsed.passo_negociacao_modo === 'fixo' ? 'fixo' : parsed.passo_negociacao_modo === 'proporcional' ? 'proporcional' : undefined,
+      passo_negociacao_valor:
+        Number.isFinite(Number(parsed.passo_negociacao_valor)) ? Number(parsed.passo_negociacao_valor) : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 /** Busca rota por origem/destino/operação (operação exata normalizada). */
 export async function buscarConfigRota(opts: {
   id?: number | string | null;
@@ -57,7 +83,7 @@ export async function buscarConfigRota(opts: {
     const body = (await res.json()) as { data?: ConfigRotaGmx };
     const rota = body.data ?? null;
     if (!rota || rota.ativo === false) return null;
-    return rota;
+    return { ...rota, regras_operacionais: parseRegrasRota(rota.evidencia) };
   }
 
   const url = `${config.directusUrl}/items/config_rotas?filter[ativo][_eq]=true&limit=5000`;
@@ -65,7 +91,10 @@ export async function buscarConfigRota(opts: {
   if (!res.ok) return null;
 
   const body = (await res.json()) as { data?: ConfigRotaGmx[] };
-  const lista = body.data ?? [];
+  const lista = (body.data ?? []).map((rota) => ({
+    ...rota,
+    regras_operacionais: parseRegrasRota(rota.evidencia),
+  }));
   const o = normalizar(opts.origem ?? '');
   const d = normalizar(opts.destino ?? '');
   const op = opts.operacao ? normalizar(opts.operacao) : '';
@@ -115,6 +144,9 @@ Valor inicial da oferta na mensagem: R$ ${oferta.toFixed(0)}
 
 Regras:
 - NUNCA aceite abaixo de R$ ${min.toFixed(0)} nem acima de R$ ${max.toFixed(0)}
+- Preferencia de proximidade: ${rota.regras_operacionais?.preferencia_proximidade === 'agora' ? 'local atual' : 'local na data de coleta'}
+- GPS maximo aceito: ${rota.regras_operacionais?.gps_max_horas ?? 24}h
+- Degrau de negociacao: ${rota.regras_operacionais?.passo_negociacao_modo === 'fixo' ? `fixo de R$ ${(rota.regras_operacionais?.passo_negociacao_valor ?? 100).toFixed(0)}` : 'proporcional à faixa'}
 - Se motorista contrapropõe, suba GRADUALMENTE dentro da faixa (não pule direto pro máximo)
 - Após 3 rodadas sem acordo ou pedido abaixo do mínimo: use ferramenta escalonar_negociacao e pause`;
 }

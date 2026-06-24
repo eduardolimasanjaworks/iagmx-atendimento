@@ -276,10 +276,10 @@ export async function seedEmbarquesSimulados(opts?: { qtd?: number; seed?: numbe
     const rota = pick(rnd, ativas);
     const min = Number(rota.valor_minimo);
     const max = Number(rota.valor_maximo);
-    const pickup = new Date(estado.simNowMs + (2 + Math.floor(rnd() * 72)) * 3600_000).toISOString();
+    const pickup = new Date(estado.simNowMs + (6 + Math.floor(rnd() * 24 * 10)) * 3600_000).toISOString();
     const total = min + Math.floor(rnd() * Math.max(0, max - min + 1));
     await directusPost('embarques', {
-      status: 'new',
+      status: rnd() < 0.55 ? 'new' : 'needs_attention',
       origin: rota.origem,
       destination: rota.destino,
       pickup_date: pickup,

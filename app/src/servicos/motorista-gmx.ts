@@ -156,6 +156,8 @@ export async function registrarDisponibilidade(dados: {
   status?: string;
   localizacao_atual?: string;
   local_disponibilidade?: string;
+  local_destino_atual?: string;
+  local_liberacao_prevista?: string;
   latitude?: number;
   longitude?: number;
   data_previsao_disponibilidade?: string;
@@ -181,7 +183,11 @@ export async function registrarDisponibilidade(dados: {
     disponivel: dados.disponivel ?? statusErp === 'disponivel',
     status: statusErp,
     localizacao_atual: dados.localizacao_atual,
-    local_disponibilidade: dados.local_disponibilidade ?? dados.localizacao_atual,
+    local_destino_atual: dados.local_destino_atual ?? dados.localizacao_atual,
+    local_liberacao_prevista:
+      dados.local_liberacao_prevista ?? dados.local_disponibilidade ?? dados.localizacao_atual,
+    local_disponibilidade:
+      dados.local_liberacao_prevista ?? dados.local_disponibilidade ?? dados.localizacao_atual,
     latitude: dados.latitude,
     longitude: dados.longitude,
     data_previsao_disponibilidade: dados.data_previsao_disponibilidade,
@@ -218,7 +224,7 @@ export async function buscarUltimaDisponibilidade(
     sort: '-date_updated,-date_created',
     limit: '1',
     fields:
-      'id,motorista_id,disponivel,status,localizacao_atual,local_disponibilidade,latitude,longitude,data_previsao_disponibilidade,observacao,date_updated,date_created',
+      'id,motorista_id,disponivel,status,localizacao_atual,local_disponibilidade,local_destino_atual,local_liberacao_prevista,latitude,longitude,data_previsao_disponibilidade,observacao,date_updated,date_created',
   });
   return lista[0] ?? null;
 }
@@ -230,6 +236,8 @@ export async function verificarDisponibilidadeNoErp(
     disponivel?: boolean;
     localizacao_atual?: string;
     local_disponibilidade?: string;
+    local_destino_atual?: string;
+    local_liberacao_prevista?: string;
     status?: string;
     latitude?: number;
     longitude?: number;
@@ -273,7 +281,7 @@ export async function verificarDisponibilidadeNoErp(
   }
 
   if (esperado.local_disponibilidade) {
-    const locErp = String(registro.local_disponibilidade ?? '').toLowerCase();
+    const locErp = String(registro.local_liberacao_prevista ?? registro.local_disponibilidade ?? '').toLowerCase();
     const locEsp = esperado.local_disponibilidade.toLowerCase();
     const cidadeEsp = locEsp.split(/\s+/)[0];
     if (cidadeEsp.length > 2 && !locErp.includes(cidadeEsp)) {

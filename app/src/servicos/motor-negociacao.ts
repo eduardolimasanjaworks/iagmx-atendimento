@@ -23,6 +23,8 @@ export interface FaixaNegociacao {
   valorMaximo: number;
   configRotaId?: number | null;
   fonte: 'embarque' | 'config_rotas';
+  passoNegociacaoModo?: 'proporcional' | 'fixo';
+  passoNegociacaoValor?: number;
 }
 
 export interface EstadoNegociacao {
@@ -63,7 +65,7 @@ function faixaValida(min: number, max: number): boolean {
 async function faixaDoEmbarqueAtivo(
   telefone: string,
   oferta: OfertaNegociacao,
-): Promise<{ valorMinimo: number; valorMaximo: number; configRotaId?: number | null } | null> {
+): Promise<{ valorMinimo: number; valorMaximo: number; configRotaId?: number | null; passoNegociacaoModo?: 'proporcional' | 'fixo'; passoNegociacaoValor?: number } | null> {
   const motorista = await buscarMotoristaPorTelefone(telefone);
   if (!motorista) return null;
 
@@ -75,10 +77,14 @@ async function faixaDoEmbarqueAtivo(
     const valorMinimo = Number(e.valor_minimo);
     const valorMaximo = Number(e.valor_maximo);
     if (faixaValida(valorMinimo, valorMaximo)) {
+      const configRotaId = e.config_rota_id != null ? Number(e.config_rota_id) : null;
+      const rota = configRotaId ? await buscarConfigRota({ id: configRotaId }) : null;
       return {
         valorMinimo,
         valorMaximo,
-        configRotaId: e.config_rota_id != null ? Number(e.config_rota_id) : null,
+        configRotaId,
+        passoNegociacaoModo: rota?.regras_operacionais?.passo_negociacao_modo,
+        passoNegociacaoValor: rota?.regras_operacionais?.passo_negociacao_valor,
       };
     }
   }
@@ -104,6 +110,8 @@ export async function obterFaixaNegociacao(
         valorMaximo: emb.valorMaximo,
         configRotaId: emb.configRotaId ?? null,
         fonte: 'embarque',
+        passoNegociacaoModo: emb.passoNegociacaoModo,
+        passoNegociacaoValor: emb.passoNegociacaoValor,
       };
     }
   }
@@ -128,6 +136,8 @@ export async function obterFaixaNegociacao(
         valorMaximo,
         configRotaId: rota.id,
         fonte: 'config_rotas',
+        passoNegociacaoModo: rota.regras_operacionais?.passo_negociacao_modo,
+        passoNegociacaoValor: rota.regras_operacionais?.passo_negociacao_valor,
       };
     }
   }
@@ -181,6 +191,10 @@ function valorDentroDaFaixa(valor: number, faixa: FaixaNegociacao): boolean {
 }
 
 function passoNegociacao(faixa: FaixaNegociacao): number {
+  if (faixa.passoNegociacaoModo === 'fixo') {
+    const valor = Number(faixa.passoNegociacaoValor);
+    return Number.isFinite(valor) && valor > 0 ? valor : 100;
+  }
   const range = Math.max(0, faixa.valorMaximo - faixa.valorMinimo);
   if (range <= 0) return 0;
   return Math.max(100, Math.ceil(range / RODADAS_MAX));

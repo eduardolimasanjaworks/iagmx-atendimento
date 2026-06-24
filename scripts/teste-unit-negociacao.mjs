@@ -29,10 +29,24 @@ async function run() {
   const a3 = avaliarNegociacao({ mensagem: 'fecho em 4800', faixa, estado });
   assert.equal(a3.tipo, 'aceite');
   assert.equal(a3.valorAceito, 4800);
+
+  const faixaFixa = {
+    origem: 'Campinas SP',
+    destino: 'Curitiba PR',
+    valorOfertado: 4000,
+    valorMinimo: 4000,
+    valorMaximo: 5000,
+    fonte: 'config_rotas',
+    passoNegociacaoModo: 'fixo',
+    passoNegociacaoValor: 200,
+  };
+  const estadoFixo = { rodadas: 0, faixa: faixaFixa, ultimoValorPedido: undefined, ultimaContraofertaIa: undefined };
+  const a4 = avaliarNegociacao({ mensagem: 'preciso de 4800', faixa: faixaFixa, estado: estadoFixo });
+  assert.equal(a4.tipo, 'contraproposta_ia');
+  assert.equal(a4.valorProposto, 4200);
 }
 
 run().catch((err) => {
   console.error(err);
   process.exitCode = 1;
 });
-
