@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Monitor por telefone - IA GMX</title>
-  <link rel="stylesheet" href="/phone.css?v=20260624-3" />
-  <link rel="stylesheet" href="/phone-monitor.css?v=20260624-3" />
-  <link rel="stylesheet" href="/phone-simulator.css?v=20260624-3" />
-  <link rel="stylesheet" href="/phone-editor.css?v=20260624-3" />
-  <link rel="stylesheet" href="/phone-whatsapp.css?v=20260624-3" />
-  <link rel="stylesheet" href="/phone-contrast.css?v=20260624-3" />
+  <link rel="stylesheet" href="/phone.css?v=20260624-5" />
+  <link rel="stylesheet" href="/phone-monitor.css?v=20260624-5" />
+  <link rel="stylesheet" href="/phone-simulator.css?v=20260624-5" />
+  <link rel="stylesheet" href="/phone-editor.css?v=20260624-5" />
+  <link rel="stylesheet" href="/phone-whatsapp.css?v=20260624-5" />
+  <link rel="stylesheet" href="/phone-contrast.css?v=20260624-5" />
 </head>
 <body>
   <div class="wrap">
@@ -207,46 +207,10 @@
     </section>
 
     <section id="whatsappPanel" class="card admin-panel" hidden>
-      <h2>Conexao do numero da IA</h2>
-      <p class="muted">Abra o QR, acompanhe o status e reconecte a instancia sem sair do painel principal.</p>
-      <div class="whatsapp-layout">
-        <div class="whatsapp-box">
-          <div class="whatsapp-head">
-            <div>
-              <div class="table-title">Status da sessao</div>
-              <div class="muted" id="waStatusText">Aguardando consulta.</div>
-            </div>
-            <span id="waBadge" class="badge">verificando...</span>
-          </div>
-          <div class="qr-box">
-            <div class="qr-frame" id="waQrFrame">
-              <div class="qr-placeholder" id="waQrPlaceholder">Clique em "Abrir QR" para carregar a sessao atual.</div>
-              <img id="waQrImg" alt="QR Code WhatsApp" hidden />
-            </div>
-            <div class="actions">
-              <button type="button" id="waBtnAtualizar">Verificar agora</button>
-              <button type="button" class="primary" id="waBtnGerar">Abrir QR</button>
-              <button type="button" id="waBtnReconectar">Reconectar sessao</button>
-            </div>
-            <div class="cooldown-box" id="waCooldownBox">
-              <div class="cooldown-title" id="waCooldownTitle">Calma, estou cuidando disso por aqui.</div>
-              <div class="cooldown-copy" id="waCooldownCopy"></div>
-              <div class="cooldown-track">
-                <div class="cooldown-bar" id="waCooldownBar"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="whatsapp-box">
-          <div class="table-title">Como conectar</div>
-          <div class="whatsapp-steps">
-            <div class="whatsapp-step"><span>1</span><p>Abra o WhatsApp no aparelho que deseja conectar.</p></div>
-            <div class="whatsapp-step"><span>2</span><p>Entre em dispositivos conectados e escolha conectar dispositivo.</p></div>
-            <div class="whatsapp-step"><span>3</span><p>Escaneie o QR desta tela e espere o status ficar conectado.</p></div>
-          </div>
-          <div id="waPanelStatus" class="result-box">O painel do WhatsApp ainda nao foi consultado.</div>
-        </div>
-      </div>
+      <h2>Conexao dos numeros da IA</h2>
+      <p class="muted">Veja o QR auxiliar de teste e o QR oficial da GMX/Chatwoot no mesmo contrato visual e operacional.</p>
+      <div id="waGlobalNotice" class="result-box">Carregando configuracao global da IA.</div>
+      <div id="waTargets" class="whatsapp-targets"></div>
     </section>
 
     <section id="pausePanel" class="card admin-panel" hidden>
@@ -537,17 +501,17 @@
     </footer>
   </div>
 
-  <script src="/painel-auth.js?v=20260624-3"></script>
-  <script src="/phone.js?v=20260624-3"></script>
-  <script src="/phone-chat.js?v=20260624-3"></script>
-  <script src="/phone-admin.js?v=20260624-3"></script>
-  <script src="/phone-ops.js?v=20260624-3"></script>
-  <script src="/phone-pause.js?v=20260624-3"></script>
-  <script src="/phone-simulator.js?v=20260624-3"></script>
-  <script src="/phone-training.js?v=20260624-3"></script>
-  <script src="/phone-editor.js?v=20260624-3"></script>
-  <script src="/phone-ocr-editor.js?v=20260624-3"></script>
-  <script src="/phone-editor-core.js?v=20260624-3"></script>
-  <script src="/phone-whatsapp.js?v=20260624-3"></script>
+  <script src="/painel-auth.js?v=20260624-5"></script>
+  <script src="/phone.js?v=20260624-5"></script>
+  <script src="/phone-chat.js?v=20260624-5"></script>
+  <script src="/phone-admin.js?v=20260624-5"></script>
+  <script src="/phone-ops.js?v=20260624-5"></script>
+  <script src="/phone-pause.js?v=20260624-5"></script>
+  <script src="/phone-simulator.js?v=20260624-5"></script>
+  <script src="/phone-training.js?v=20260624-5"></script>
+  <script src="/phone-editor.js?v=20260624-5"></script>
+  <script src="/phone-ocr-editor.js?v=20260624-5"></script>
+  <script src="/phone-editor-core.js?v=20260624-5"></script>
+  <script src="/phone-whatsapp.js?v=20260624-5"></script>
 </body>
 </html>

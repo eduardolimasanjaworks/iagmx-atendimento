@@ -6,6 +6,9 @@ import { normalizarTelefone } from '../util/telefone.js';
 import { painelAdmin, painelAutenticado } from '../servicos/painel-acesso.js';
 import {
   contatoPausado,
+  contatoAtivadoIndividualmente,
+  obterModoGlobalIa,
+  iaPodeResponder,
   pausarContato,
   despausarContato,
 } from '../servicos/pausa.js';
@@ -33,11 +36,23 @@ export async function rotasAtendimento(app: FastifyInstance): Promise<void> {
       const telefone = normalizarTelefone(req.params.telefone);
       const erp = await obterEstadoAtendimentoErp(telefone);
       const pausadoRedis = await contatoPausado(telefone);
+      const ativadoContato = await contatoAtivadoIndividualmente(telefone);
+      const modoGlobal = await obterModoGlobalIa();
+      const podeResponder = await iaPodeResponder(telefone);
+      const motivoPausa =
+        pausadoRedis || Boolean(erp.estado.ia_pausada)
+          ? erp.estado.ia_pausa_motivo
+          : modoGlobal === 'default_off' && !ativadoContato
+            ? 'desligada_por_padrao_global'
+            : erp.estado.ia_pausa_motivo;
       return {
         telefone,
         motorista_id: erp.motoristaId,
-        ia_pausada: pausadoRedis || Boolean(erp.estado.ia_pausada),
-        ia_pausa_motivo: erp.estado.ia_pausa_motivo,
+        ia_pausada: !podeResponder,
+        ia_pausa_motivo: motivoPausa,
+        ia_modo_global: modoGlobal,
+        ia_liberada_contato: ativadoContato,
+        ia_ativa_efetiva: podeResponder,
         precisa_atendimento: Boolean(erp.estado.precisa_atendimento),
         precisa_atendimento_motivo: erp.estado.precisa_atendimento_motivo,
         ultima_intencao_whatsapp: erp.estado.ultima_intencao_whatsapp,

@@ -52,7 +52,13 @@ export async function rotasSaude(app: FastifyInstance): Promise<void> {
             openaiUtilidades: Boolean(config.openaiToken),
           },
         ),
-        comTimeout(obterStatusPausa(), 1000, { global: false, globalMotivo: undefined, contatos: [] }),
+        comTimeout(obterStatusPausa(), 1000, {
+          global: false,
+          globalMotivo: undefined,
+          modoGlobal: 'default_on',
+          contatos: [],
+          contatosAtivos: [],
+        }),
         directusConfigurado()
           ? comTimeout(validarDirectusToken(), 2500, false)
           : Promise.resolve(false),

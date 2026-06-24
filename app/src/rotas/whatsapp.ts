@@ -5,11 +5,16 @@ import type { FastifyInstance } from 'fastify';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   obterStatusConexao,
+  obterStatusConexaoPorNome,
+  listarStatusConexaoWhatsapp,
   obterQrCode,
+  obterQrCodePorNome,
   reconectar,
+  reconectarPorNome,
 } from '../servicos/evolution-instancia.js';
 import { config } from '../config.js';
 import { painelAutenticado, painelAdmin } from '../servicos/painel-acesso.js';
+import { obterAlvoWhatsapp } from '../servicos/whatsapp-targets.js';
 
 const COOLDOWN_MS = {
   status: 3000,
@@ -41,13 +46,18 @@ function reportarDebugWhatsapp(
   extra?: Record<string, unknown>,
 ) {
   let url = 'http://127.0.0.1:7777/event';
-  let sessionId = 'whatsapp-false-open';
+  let sessionId = 'whatsapp-auxiliar-qr';
   try {
-    const caminho = '.dbg/whatsapp-false-open.env';
-    if (existsSync(caminho)) {
+    const caminhos = [
+      '.dbg/whatsapp-auxiliar-qr.env',
+      '.dbg/whatsapp-false-open.env',
+    ];
+    for (const caminho of caminhos) {
+      if (!existsSync(caminho)) continue;
       const env = readFileSync(caminho, 'utf8');
       url = env.match(/DEBUG_SERVER_URL=(.+)/)?.[1]?.trim() || url;
       sessionId = env.match(/DEBUG_SESSION_ID=(.+)/)?.[1]?.trim() || sessionId;
+      break;
     }
   } catch {
     /* noop */
@@ -115,6 +125,161 @@ function aplicarCooldown(
 }
 
 export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
+  app.get('/api/whatsapp/alvos', async (req, reply) => {
+    if (!exigirPainel(req, reply)) return;
+    return {
+      itens: await listarStatusConexaoWhatsapp(),
+      escopo: 'conexao_dupla_ia',
+      pausaGlobalInicial: config.iaGlobalDefaultOff,
+    };
+  });
+
+  app.get<{ Params: { alvo: string } }>('/api/whatsapp/alvos/:alvo/status', async (req, reply) => {
+    reportarDebugWhatsapp(req, 'status', 'entrada', { alvo: req.params.alvo });
+    if (!exigirPainel(req, reply)) return;
+    if (!obterAlvoWhatsapp(req.params.alvo)) {
+      return reply.status(404).send({ erro: 'Alvo WhatsApp não encontrado' });
+    }
+    if (!aplicarCooldown('status', reply)) {
+      reportarDebugWhatsapp(req, 'status', 'cooldown', {
+        alvo: req.params.alvo,
+        ultimoStatusEm: ULTIMA_ACAO.status,
+        cooldownMs: COOLDOWN_MS.status,
+      });
+      return;
+    }
+    const status = await obterStatusConexaoPorNome(req.params.alvo);
+    reportarDebugWhatsapp(req, 'status', 'permitido', {
+      alvo: req.params.alvo,
+      statusRetornado: status.state,
+      conectado: status.conectado,
+      podeEnviar: status.podeEnviar,
+    });
+    return {
+      ...status,
+      escopo: 'conexao_dupla_ia',
+      cooldownMs: COOLDOWN_MS.status,
+      cooldownAte: new Date(ULTIMA_ACAO.status + COOLDOWN_MS.status).toISOString(),
+    };
+  });
+
+  app.get<{ Params: { alvo: string } }>('/api/whatsapp/alvos/:alvo/qrcode', async (req, reply) => {
+    reportarDebugWhatsapp(req, 'qrcode', 'entrada', { alvo: req.params.alvo });
+    if (!exigirPainel(req, reply)) return;
+    const alvo = obterAlvoWhatsapp(req.params.alvo);
+    if (!alvo) {
+      return reply.status(404).send({ erro: 'Alvo WhatsApp não encontrado' });
+    }
+    if (!alvo.permiteQr) {
+      return reply.status(403).send({ erro: 'Este alvo nao permite abrir QR por este painel.' });
+    }
+    if (!aplicarCooldown('qrcode', reply)) {
+      reportarDebugWhatsapp(req, 'qrcode', 'cooldown', {
+        alvo: req.params.alvo,
+        ultimoQrEm: ULTIMA_ACAO.qrcode,
+        cooldownMs: COOLDOWN_MS.qrcode,
+      });
+      return;
+    }
+    const status = await obterStatusConexaoPorNome(req.params.alvo);
+    reportarDebugWhatsapp(req, 'qrcode', 'permitido', {
+      alvo: req.params.alvo,
+      statusAntesQr: status.state,
+      conectadoAntesQr: status.conectado,
+      podeEnviarAntesQr: status.podeEnviar,
+      permiteReconectar: alvo.permiteReconectar,
+    });
+    if (status.conectado) {
+      return {
+        conectado: true,
+        base64: null,
+        mensagem: 'WhatsApp ja conectado',
+        alvo: req.params.alvo,
+        cooldownMs: COOLDOWN_MS.qrcode,
+        cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+      };
+    }
+    const qr = await obterQrCodePorNome(req.params.alvo);
+    reportarDebugWhatsapp(req, 'qrcode', 'permitido', {
+      alvo: req.params.alvo,
+      hasBase64: Boolean(qr.base64),
+      hasPairingCode: Boolean(qr.pairingCode),
+      count: qr.count ?? null,
+    });
+    if (!qr.base64) {
+      const statusAtualizado = await obterStatusConexaoPorNome(req.params.alvo);
+      reportarDebugWhatsapp(req, 'qrcode', 'permitido', {
+        alvo: req.params.alvo,
+        statusDepoisQr: statusAtualizado.state,
+        conectadoDepoisQr: statusAtualizado.conectado,
+        podeEnviarDepoisQr: statusAtualizado.podeEnviar,
+      });
+      if (statusAtualizado.conectado) {
+        return {
+          conectado: true,
+          base64: null,
+          mensagem: 'WhatsApp ja conectado',
+          alvo: req.params.alvo,
+          cooldownMs: COOLDOWN_MS.qrcode,
+          cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+        };
+      }
+      return reply.status(503).send({ erro: 'QR code não disponível. Tente reconectar.', alvo: req.params.alvo });
+    }
+    return {
+      conectado: false,
+      base64: qr.base64,
+      pairingCode: qr.pairingCode,
+      instancia: status.instance,
+      alvo: req.params.alvo,
+      escopo: 'conexao_dupla_ia',
+      cooldownMs: COOLDOWN_MS.qrcode,
+      cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+    };
+  });
+
+  app.post<{ Params: { alvo: string } }>('/api/whatsapp/alvos/:alvo/reconectar', async (req, reply) => {
+    reportarDebugWhatsapp(req, 'reconectar', 'entrada', { alvo: req.params.alvo });
+    if (!exigirAdmin(req, reply)) return;
+    const alvo = obterAlvoWhatsapp(req.params.alvo);
+    if (!alvo) {
+      return reply.status(404).send({ erro: 'Alvo WhatsApp não encontrado' });
+    }
+    if (!alvo.permiteReconectar) {
+      return reply.status(403).send({ erro: 'Este numero nao pode ser reconectado por este painel.' });
+    }
+    if (!aplicarCooldown('reconectar', reply)) {
+      reportarDebugWhatsapp(req, 'reconectar', 'cooldown', { alvo: req.params.alvo });
+      return;
+    }
+    const status = await obterStatusConexaoPorNome(req.params.alvo);
+    const qr = await reconectarPorNome(req.params.alvo);
+    const statusAtualizado = await obterStatusConexaoPorNome(req.params.alvo);
+    if (!qr.base64 && !statusAtualizado.conectado) {
+      return reply.status(503).send({
+        erro: 'Nao foi possivel gerar novo QR para esta sessao.',
+        instancia: alvo.instancia,
+        alvo: req.params.alvo,
+        escopo: 'conexao_dupla_ia',
+        cooldownMs: COOLDOWN_MS.reconectar,
+        cooldownAte: new Date(ULTIMA_ACAO.reconectar + COOLDOWN_MS.reconectar).toISOString(),
+      });
+    }
+    return {
+      ok: true,
+      conectado: statusAtualizado.conectado,
+      state: statusAtualizado.state,
+      base64: qr.base64,
+      pairingCode: qr.pairingCode,
+      instancia: alvo.instancia,
+      alvo: req.params.alvo,
+      escopo: 'conexao_dupla_ia',
+      estavaConectado: status.conectado,
+      cooldownMs: COOLDOWN_MS.reconectar,
+      cooldownAte: new Date(ULTIMA_ACAO.reconectar + COOLDOWN_MS.reconectar).toISOString(),
+    };
+  });
+
   /** Status da conexão */
   app.get('/api/whatsapp/status', async (req, reply) => {
     reportarDebugWhatsapp(req, 'status', 'entrada');

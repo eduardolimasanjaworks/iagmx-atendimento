@@ -10,6 +10,13 @@
   margin-top: .9rem;
 }
 
+.whatsapp-targets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .9rem;
+  margin-top: .9rem;
+}
+
 .whatsapp-box {
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -22,6 +29,59 @@
   justify-content: space-between;
   gap: .75rem;
   align-items: flex-start;
+}
+
+.wa-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+  margin-top: .9rem;
+}
+
+.wa-meta-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(148, 163, 184, .08);
+  padding: .85rem;
+}
+
+.wa-meta-label {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+
+.wa-meta-value {
+  margin-top: .45rem;
+  font-size: .95rem;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.wa-note-box,
+.wa-help-box {
+  display: grid;
+  gap: .45rem;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  background: #fff;
+  padding: .85rem;
+  color: var(--muted);
+  font-size: .9rem;
+  line-height: 1.45;
+}
+
+.wa-help-box {
+  margin-top: .9rem;
+  font-size: .82rem;
+}
+
+.wa-note-line code,
+.wa-help-box code {
+  font-family: inherit;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .qr-box {
@@ -134,8 +194,21 @@
   color: #92400e;
 }
 
+.badge.stale {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 @media (max-width: 960px) {
   .whatsapp-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .wa-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .whatsapp-targets {
     grid-template-columns: 1fr;
   }
 }

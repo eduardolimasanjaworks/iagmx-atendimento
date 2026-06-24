@@ -32,6 +32,9 @@
       setStatus(
         [
           `Telefone: ${data.telefone}`,
+          `IA ativa efetivamente: ${data.ia_ativa_efetiva ? 'sim' : 'nao'}`,
+          `Modo global: ${data.ia_modo_global === 'default_off' ? 'desligada por padrao' : 'liberada por padrao'}`,
+          `Liberada individualmente: ${data.ia_liberada_contato ? 'sim' : 'nao'}`,
           `IA pausada: ${data.ia_pausada ? 'sim' : 'nao'}`,
           `Motivo: ${data.ia_pausa_motivo || 'sem motivo registrado'}`,
           `Precisa atendimento: ${data.precisa_atendimento ? 'sim' : 'nao'}`,
@@ -39,6 +42,10 @@
         ].join('\n'),
         data.ia_pausada ? 'warn' : 'ok',
       );
+      $('resumeContactBtn').textContent =
+        data.ia_modo_global === 'default_off'
+          ? 'Liberar este contato'
+          : 'Retomar este contato';
     } catch (error) {
       if (/autentic|autoriz|admin/i.test(String(error?.message || ''))) {
         state.bloqueado = true;

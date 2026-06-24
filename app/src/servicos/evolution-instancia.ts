@@ -4,14 +4,13 @@
 import { config } from '../config.js';
 import { resolverStatusEvolution } from './evolution-status.js';
 import { existsSync, readFileSync } from 'node:fs';
-
-interface AlvoWhatsapp {
-  nomeLogico: 'ia_local' | 'chatwoot_futuro';
-  url: string;
-  apiKey: string;
-  instancia: string;
-  origem: string;
-}
+import {
+  listarAlvosWhatsapp,
+  obterAlvoWhatsapp,
+  obterAlvoWhatsappPadrao,
+  type AlvoWhatsapp,
+  type AlvoWhatsappNome,
+} from './whatsapp-targets.js';
 
 const headers = (apiKey: string) => ({
   'Content-Type': 'application/json',
@@ -23,13 +22,18 @@ function reportarDebugEvolution(
   extra?: Record<string, unknown>,
 ) {
   let url = 'http://127.0.0.1:7777/event';
-  let sessionId = 'whatsapp-false-open';
+  let sessionId = 'whatsapp-auxiliar-qr';
   try {
-    const caminho = '.dbg/whatsapp-false-open.env';
-    if (existsSync(caminho)) {
+    const caminhos = [
+      '.dbg/whatsapp-auxiliar-qr.env',
+      '.dbg/whatsapp-false-open.env',
+    ];
+    for (const caminho of caminhos) {
+      if (!existsSync(caminho)) continue;
       const env = readFileSync(caminho, 'utf8');
       url = env.match(/DEBUG_SERVER_URL=(.+)/)?.[1]?.trim() || url;
       sessionId = env.match(/DEBUG_SESSION_ID=(.+)/)?.[1]?.trim() || sessionId;
+      break;
     }
   } catch {
     /* noop */
@@ -61,12 +65,16 @@ export interface StatusConexao {
   conectado: boolean;
   motivoDesconexao?: string;
   podeEnviar: boolean;
-  alvo: 'ia_local' | 'chatwoot_futuro';
+  alvo: AlvoWhatsappNome;
   origem: string;
   servidor: string;
   numeroConectado?: string | null;
   nomePerfil?: string | null;
   atualizadoEm?: string | null;
+  titulo: string;
+  descricao: string;
+  permiteReconectar: boolean;
+  permiteQr: boolean;
 }
 
 interface InstanciaEvolution {
@@ -78,45 +86,6 @@ interface InstanciaEvolution {
   updatedAt?: string | null;
   disconnectionReasonCode?: number;
   disconnectionObject?: string;
-}
-
-/**
- * A IA opera exclusivamente nesta conexão local por enquanto.
- * Quando a integração com o outro servidor entrar, ela deve usar outro alvo
- * explícito para evitar reconectar ou derrubar a sessão errada.
- */
-function alvoIaLocal(): AlvoWhatsapp {
-  return {
-    nomeLogico: 'ia_local',
-    url: config.whatsappIaUrl,
-    apiKey: config.whatsappIaApiKey,
-    instancia: config.whatsappIaInstance,
-    origem: config.whatsappIaOrigem,
-  };
-}
-
-/**
- * Preparado para o futuro, mas desabilitado por padrão.
- * Não usar este alvo nas rotas atuais da IA antes de uma virada controlada.
- */
-function alvoChatwootFuturo(): AlvoWhatsapp {
-  if (!config.whatsappChatwootFuturoHabilitado) {
-    throw new Error('Integração futura com servidor externo ainda não foi habilitada.');
-  }
-  if (
-    !config.whatsappChatwootFuturoUrl ||
-    !config.whatsappChatwootFuturoApiKey ||
-    !config.whatsappChatwootFuturoInstance
-  ) {
-    throw new Error('Integração futura configurada de forma incompleta.');
-  }
-  return {
-    nomeLogico: 'chatwoot_futuro',
-    url: config.whatsappChatwootFuturoUrl,
-    apiKey: config.whatsappChatwootFuturoApiKey,
-    instancia: config.whatsappChatwootFuturoInstance,
-    origem: 'externo_futuro',
-  };
 }
 
 function servidorVisivel(url: string): string {
@@ -153,6 +122,10 @@ async function obterStatusConexaoPorAlvo(alvo: AlvoWhatsapp): Promise<StatusCone
       alvo: alvo.nomeLogico,
       origem: alvo.origem,
       servidor: servidorVisivel(alvo.url),
+      titulo: alvo.titulo,
+      descricao: alvo.descricao,
+      permiteReconectar: alvo.permiteReconectar,
+      permiteQr: alvo.permiteQr,
     };
   }
   if (!res.ok) {
@@ -255,12 +228,26 @@ async function obterStatusConexaoPorAlvo(alvo: AlvoWhatsapp): Promise<StatusCone
     numeroConectado: extrairNumeroConectado(instanciaDetalhe),
     nomePerfil: instanciaDetalhe?.profileName ?? null,
     atualizadoEm: instanciaDetalhe?.updatedAt ?? null,
+    titulo: alvo.titulo,
+    descricao: alvo.descricao,
+    permiteReconectar: alvo.permiteReconectar,
+    permiteQr: alvo.permiteQr,
   };
 }
 
 /** Estado da conexão ativa da IA */
 export async function obterStatusConexao(): Promise<StatusConexao> {
-  return obterStatusConexaoPorAlvo(alvoIaLocal());
+  return obterStatusConexaoPorAlvo(obterAlvoWhatsappPadrao());
+}
+
+export async function obterStatusConexaoPorNome(nome: string): Promise<StatusConexao> {
+  const alvo = obterAlvoWhatsapp(nome);
+  if (!alvo) throw new Error('Alvo WhatsApp não encontrado');
+  return obterStatusConexaoPorAlvo(alvo);
+}
+
+export async function listarStatusConexaoWhatsapp(): Promise<StatusConexao[]> {
+  return Promise.all(listarAlvosWhatsapp().map((alvo) => obterStatusConexaoPorAlvo(alvo)));
 }
 
 export interface QrCodeResposta {
@@ -301,7 +288,13 @@ async function obterQrCodePorAlvo(alvo: AlvoWhatsapp): Promise<QrCodeResposta> {
 
 /** QR da conexão ativa da IA */
 export async function obterQrCode(): Promise<QrCodeResposta> {
-  return obterQrCodePorAlvo(alvoIaLocal());
+  return obterQrCodePorAlvo(obterAlvoWhatsappPadrao());
+}
+
+export async function obterQrCodePorNome(nome: string): Promise<QrCodeResposta> {
+  const alvo = obterAlvoWhatsapp(nome);
+  if (!alvo) throw new Error('Alvo WhatsApp não encontrado');
+  return obterQrCodePorAlvo(alvo);
 }
 
 /** Desconecta sessão e gera novo QR */
@@ -333,7 +326,16 @@ async function reconectarPorAlvo(alvo: AlvoWhatsapp): Promise<QrCodeResposta> {
 
 /** Reconexão da conexão ativa da IA */
 export async function reconectar(): Promise<QrCodeResposta> {
-  return reconectarPorAlvo(alvoIaLocal());
+  return reconectarPorAlvo(obterAlvoWhatsappPadrao());
+}
+
+export async function reconectarPorNome(nome: string): Promise<QrCodeResposta> {
+  const alvo = obterAlvoWhatsapp(nome);
+  if (!alvo) throw new Error('Alvo WhatsApp não encontrado');
+  if (!alvo.permiteReconectar) {
+    throw new Error('Este numero nao pode ser reconectado por este painel.');
+  }
+  return reconectarPorAlvo(alvo);
 }
 
 /**
@@ -341,7 +343,10 @@ export async function reconectar(): Promise<QrCodeResposta> {
  * somente quando a integração externa estiver habilitada por .env.
  */
 export async function listarInstanciasChatwootFuturo(): Promise<InstanciaEvolution[]> {
-  const alvo = alvoChatwootFuturo();
+  const alvo = obterAlvoWhatsapp('oficial_gmx');
+  if (!alvo) {
+    throw new Error('WhatsApp oficial GMX não configurado.');
+  }
   const res = await fetch(`${alvo.url}/instance/fetchInstances`, {
     headers: headers(alvo.apiKey),
     signal: AbortSignal.timeout(15000),

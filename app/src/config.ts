@@ -4,6 +4,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { resolverConfigWhatsappTargets } from './config-whatsapp.js';
 
 /** Carrega variáveis do arquivo .env na raiz do projeto. */
 function carregarEnv(): void {
@@ -29,6 +30,7 @@ function carregarEnv(): void {
 }
 
 carregarEnv();
+const whatsappTargets = resolverConfigWhatsappTargets();
 
 function resolverArquivoGoogle(...caminhos: string[]): string {
   for (const c of caminhos) {
@@ -83,6 +85,7 @@ const whatsappChatwootFuturoUrl = process.env.WHATSAPP_CHATWOOT_FUTURO_URL ?? ''
 const whatsappChatwootFuturoApiKey = process.env.WHATSAPP_CHATWOOT_FUTURO_API_KEY ?? '';
 const whatsappChatwootFuturoInstance = process.env.WHATSAPP_CHATWOOT_FUTURO_INSTANCE ?? '';
 const whatsappPermitirInstanciaCompartilhada = bool('WHATSAPP_PERMITIR_INSTANCIA_COMPARTILHADA', false);
+const iaGlobalDefaultOff = bool('IA_GLOBAL_DEFAULT_OFF', true);
 const openrouterToken = token('openroutertoken', 'OPENROUTER_API_KEY');
 const openrouterHabilitado = bool('OPENROUTER_HABILITADO', Boolean(openrouterToken));
 const provedorChatPreferido = (
@@ -146,6 +149,9 @@ export const config = {
   whatsappIaApiKey,
   whatsappIaInstance,
   whatsappIaOrigem: process.env.WHATSAPP_IA_ORIGEM ?? 'local',
+  whatsappAuxiliar: whatsappTargets.auxiliar,
+  whatsappOficial: whatsappTargets.oficial,
+  iaGlobalDefaultOff,
   envioSimuladoHabilitado: bool('IAGMX_ENVIO_SIMULADO', false),
   simulacaoMotoristasHabilitada: bool('SIMULACAO_MOTORISTAS', false),
   simulacaoMotoristasQtd: Math.max(1, parseInt(process.env.SIMULACAO_MOTORISTAS_QTD ?? '100', 10)),

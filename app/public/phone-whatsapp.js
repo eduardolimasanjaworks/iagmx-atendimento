@@ -1,18 +1,19 @@
 /**
- * Painel de conexao do WhatsApp embutido no /phone.
- * Reaproveita as rotas de QR e status ja existentes, sem tela paralela.
- * Esconde a aba quando o perfil nao tem acesso ao bloco da conexao da IA.
+ * Painel de conexao WhatsApp com dois alvos: auxiliar e oficial.
+ * Renderiza QR inline por alvo e compartilha o mesmo contrato do GMX.
+ * Reflete pausa global inicial e bloqueio de reconexao no numero auxiliar.
  */
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {
     json: null,
     contexto: null,
-    pollTimer: null,
-    cooldownTimer: null,
-    conectado: false,
-    cooldownMs: { atualizar: 3000, qr: 8000, reconectar: 15000 },
-    cooldownAte: { atualizar: 0, qr: 0, reconectar: 0 },
+    alvos: [],
+    qr: {},
+    cooldown: {},
+    loading: {},
+    timer: null,
+    pauseDefaultOff: true,
   };
 
   function podeVer() {
@@ -25,193 +26,192 @@
     $('whatsappPanel')?.remove();
   }
 
-  function segundosRestantes(acao) {
-    return Math.max(0, Math.ceil((state.cooldownAte[acao] - Date.now()) / 1000));
+  function formatarNumero(valor) {
+    const digits = String(valor || '').replace(/\D/g, '');
+    if (!digits) return 'Aguardando conexao';
+    if (digits.length <= 2) return `+${digits}`;
+    if (digits.length <= 4) return `+${digits.slice(0, 2)} ${digits.slice(2)}`;
+    if (digits.length <= 9) return `+${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4)}`;
+    return `+${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4, 9)}-${digits.slice(9)}`;
   }
 
-  function iniciarCooldown(acao, ateIso, fallbackMs) {
-    const alvo = ateIso ? new Date(ateIso).getTime() : Date.now() + (fallbackMs || 0);
-    if (!Number.isFinite(alvo)) return;
-    state.cooldownAte[acao] = Math.max(state.cooldownAte[acao] || 0, alvo);
-    atualizarAcoes();
-    if (state.cooldownTimer) return;
-    state.cooldownTimer = setInterval(() => {
-      atualizarAcoes();
-      if (Object.values(state.cooldownAte).every((valor) => valor <= Date.now())) {
-        clearInterval(state.cooldownTimer);
-        state.cooldownTimer = null;
-      }
-    }, 1000);
+  function formatarData(valor) {
+    if (!valor) return 'Sem registro ainda';
+    const date = new Date(valor);
+    return Number.isNaN(date.getTime()) ? 'Sem registro ainda' : date.toLocaleString('pt-BR');
   }
 
-  function setLinha(msg, kind = '') {
-    $('waStatusText').textContent = msg;
-    $('waPanelStatus').className = `result-box${kind ? ` ${kind}` : ''}`;
-    $('waPanelStatus').textContent = msg;
+  function traduzirStatus(item) {
+    if (item?.conectado) return 'Conectado';
+    if (item?.state === 'stale_open') return 'Sessao inconsistente';
+    if (item?.state === 'connecting') return 'Conectando';
+    if (item?.state === 'not_found') return 'Instancia ainda nao criada';
+    if (item?.state === 'close' || item?.state === 'closed') return 'Desconectado';
+    return item?.state || 'Status desconhecido';
   }
 
-  function atualizarBadge(estado, conectado) {
-    const badge = $('waBadge');
-    if (conectado) {
-      badge.textContent = 'conectado';
-      badge.className = 'badge open';
-      return;
+  function badgeClass(item) {
+    if (item?.conectado) return 'badge open';
+    if (item?.state === 'stale_open') return 'badge stale';
+    if (item?.state === 'connecting') return 'badge connecting';
+    return 'badge';
+  }
+
+  function cooldownKey(alvo, acao) {
+    return `${alvo}:${acao}`;
+  }
+
+  function segundosRestantes(alvo, acao) {
+    return Math.max(0, Math.ceil(((state.cooldown[cooldownKey(alvo, acao)] || 0) - Date.now()) / 1000));
+  }
+
+  function aplicarCooldown(alvo, acao, ateIso, fallbackMs) {
+    const limite = ateIso ? new Date(ateIso).getTime() : Date.now() + (fallbackMs || 0);
+    if (Number.isFinite(limite)) state.cooldown[cooldownKey(alvo, acao)] = limite;
+  }
+
+  function htmlQr(item) {
+    const qr = state.qr[item.alvo];
+    if (item.conectado && !qr?.base64) return '<div class="qr-placeholder">Conectado nesta instancia.</div>';
+    if (qr?.base64) {
+      const src = qr.base64.startsWith('data:') ? qr.base64 : `data:image/png;base64,${qr.base64}`;
+      return `<img alt="QR ${item.titulo}" src="${src}" />`;
     }
-    if (estado === 'connecting') {
-      badge.textContent = 'aguardando QR';
-      badge.className = 'badge connecting';
-      return;
-    }
-    badge.textContent = estado || 'desconectado';
-    badge.className = 'badge';
+    return '<div class="qr-placeholder">Clique em "Abrir QR da conexao atual" para carregar o pareamento deste alvo.</div>';
   }
 
-  function mostrarQr(base64) {
-    if (!base64) return;
-    const img = $('waQrImg');
-    const src = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64.replace(/^data:image\/png;base64,/, '')}`;
-    img.src = src;
-    img.hidden = false;
-    $('waQrPlaceholder').hidden = true;
+  function textoBotao(alvo, acao) {
+    const restante = segundosRestantes(alvo, acao);
+    if (acao === 'atualizar') return restante > 0 ? `Ja ja eu confiro de novo (${restante}s)` : 'Verificar agora se conectou';
+    if (acao === 'qr') return restante > 0 ? `Seguro mais um instante (${restante}s)` : 'Abrir QR da conexao atual';
+    return restante > 0 ? `Calma, vou reiniciar em ${restante}s` : 'Desconectar e gerar novo QR';
   }
 
-  function atualizarAcoes() {
-    const restanteAtualizar = segundosRestantes('atualizar');
-    const restanteQr = segundosRestantes('qr');
-    const restanteReconectar = segundosRestantes('reconectar');
-    const btnAtualizar = $('waBtnAtualizar');
-    const btnGerar = $('waBtnGerar');
-    const btnReconectar = $('waBtnReconectar');
-    btnAtualizar.textContent = restanteAtualizar > 0 ? `Verificar em ${restanteAtualizar}s` : 'Verificar agora';
-    btnGerar.textContent = restanteQr > 0 ? `Abrir QR em ${restanteQr}s` : 'Abrir QR';
-    btnReconectar.textContent = restanteReconectar > 0 ? `Reconectar em ${restanteReconectar}s` : 'Reconectar sessao';
-    if (!btnAtualizar.dataset.loading) btnAtualizar.disabled = restanteAtualizar > 0;
-    if (!btnGerar.dataset.loading) btnGerar.disabled = restanteQr > 0;
-    if (!btnReconectar.dataset.loading) btnReconectar.disabled = restanteReconectar > 0;
+  function render() {
+    const notice = $('waGlobalNotice');
+    const root = $('waTargets');
+    if (!root || !notice) return;
+    notice.className = 'result-box warn';
+    notice.textContent = state.pauseDefaultOff
+      ? 'A IA começa desligada por padrão para todos os contatos nos dois numeros. Libere individualmente os contatos que podem voltar a responder.'
+      : 'A IA está em modo global liberado. Ainda é possível pausar ou liberar contatos individualmente.';
 
-    const acaoAtiva = restanteReconectar > 0 ? 'reconectar' : (restanteQr > 0 ? 'qr' : (restanteAtualizar > 0 ? 'atualizar' : null));
-    if (!acaoAtiva) {
-      $('waCooldownBox').classList.remove('visible');
-      $('waCooldownBar').style.width = '0%';
-      return;
-    }
-    const restante = segundosRestantes(acaoAtiva);
-    const total = state.cooldownMs[acaoAtiva];
-    const restanteMs = Math.max(0, state.cooldownAte[acaoAtiva] - Date.now());
-    const progresso = Math.max(6, Math.min(100, ((total - restanteMs) / total) * 100));
-    $('waCooldownBox').classList.add('visible');
-    $('waCooldownTitle').textContent = 'Calma, estou cuidando disso por aqui.';
-    $('waCooldownCopy').textContent =
-      acaoAtiva === 'reconectar'
-        ? `Estou segurando ${restante}s antes de reiniciar tudo para proteger a sessao.`
-        : acaoAtiva === 'qr'
-          ? `Estou segurando ${restante}s antes de pedir outro QR para nao fazer spam na instancia.`
-          : `Estou esperando ${restante}s para consultar de novo sem bater na conexao toda hora.`;
-    $('waCooldownBar').style.width = `${progresso}%`;
+    root.innerHTML = state.alvos.map((item) => `
+      <div class="whatsapp-box" data-wa-target="${item.alvo}">
+        <div class="whatsapp-head">
+          <div>
+            <div class="table-title">${item.titulo}</div>
+            <div class="muted">${item.descricao}</div>
+          </div>
+          <span class="${badgeClass(item)}">${traduzirStatus(item)}</span>
+        </div>
+        <div class="wa-meta-grid">
+          <div class="wa-meta-card"><div class="wa-meta-label">Numero conectado</div><div class="wa-meta-value">${formatarNumero(item.numeroConectado)}</div></div>
+          <div class="wa-meta-card"><div class="wa-meta-label">Instancia atual</div><div class="wa-meta-value">${item.instance || 'Aguardando leitura'}</div></div>
+          <div class="wa-meta-card"><div class="wa-meta-label">Ultima atualizacao</div><div class="wa-meta-value">${formatarData(item.atualizadoEm)}</div></div>
+        </div>
+        <div class="wa-note-box">
+          <div class="wa-note-line">${item.nomePerfil ? `Perfil conectado: ${item.nomePerfil}` : 'O nome do perfil ainda nao foi informado por esta conexao.'}</div>
+          <div class="wa-note-line">Ultima verificacao feita no painel: ${new Date().toLocaleString('pt-BR')}</div>
+          <div class="wa-note-line">${item.motivoDesconexao || item.aviso || 'Sem observacoes adicionais para este alvo.'}</div>
+        </div>
+        <div class="qr-box">
+          <div class="qr-frame">${htmlQr(item)}</div>
+          <div class="actions">
+            <button type="button" data-wa-action="atualizar" data-wa-target="${item.alvo}" ${state.loading[cooldownKey(item.alvo, 'atualizar')] || segundosRestantes(item.alvo, 'atualizar') > 0 ? 'disabled' : ''}>${textoBotao(item.alvo, 'atualizar')}</button>
+            <button type="button" class="primary" data-wa-action="qr" data-wa-target="${item.alvo}" ${state.loading[cooldownKey(item.alvo, 'qr')] || segundosRestantes(item.alvo, 'qr') > 0 || item.permiteQr === false ? 'disabled' : ''}>${textoBotao(item.alvo, 'qr')}</button>
+            <button type="button" data-wa-action="reconectar" data-wa-target="${item.alvo}" ${state.loading[cooldownKey(item.alvo, 'reconectar')] || segundosRestantes(item.alvo, 'reconectar') > 0 || item.permiteReconectar === false || state.contexto?.usuario?.perfil !== 'admin' ? 'disabled' : ''}>${item.permiteReconectar ? textoBotao(item.alvo, 'reconectar') : 'Reconexao bloqueada neste alvo'}</button>
+          </div>
+          <div class="wa-help-box">
+            <div><code>Verificar agora se conectou</code> so confere o estado atual deste alvo.</div>
+            <div><code>Abrir QR da conexao atual</code> tenta abrir o pareamento sem derrubar a sessao.</div>
+            <div><code>Desconectar e gerar novo QR</code> ${item.permiteReconectar ? 'fica liberado neste alvo.' : 'nao fica liberado neste alvo.'}</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
   }
 
-  async function verificarStatus() {
-    const data = await state.json('/api/whatsapp/status');
-    if (data.cooldownAte) iniciarCooldown('atualizar', data.cooldownAte, data.cooldownMs || state.cooldownMs.atualizar);
-    state.conectado = Boolean(data.conectado);
-    atualizarBadge(data.state, state.conectado);
-    if (state.conectado) {
-      $('waQrImg').hidden = true;
-      $('waQrPlaceholder').hidden = false;
-      $('waQrPlaceholder').textContent = 'Conectado com sucesso.';
-      setLinha('Pronto, o numero esta conectado e pode responder.', 'ok');
-      pararPoll();
-      return true;
-    }
-    setLinha(data.motivoDesconexao || 'Ainda aguardando leitura do QR ou nova conexao.');
-    return false;
+  async function carregarAlvos() {
+    const data = await state.json('/api/whatsapp/alvos');
+    state.alvos = Array.isArray(data.itens) ? data.itens : [];
+    state.pauseDefaultOff = Boolean(data.pausaGlobalInicial);
+    render();
   }
 
-  async function carregarQr() {
-    if (segundosRestantes('qr') > 0) return setLinha(`So mais ${segundosRestantes('qr')}s e eu libero um novo QR.`);
-    $('waBtnGerar').dataset.loading = '1';
-    $('waBtnAtualizar').dataset.loading = '1';
-    $('waBtnGerar').disabled = true;
-    $('waBtnAtualizar').disabled = true;
+  async function atualizarAlvo(alvo) {
+    state.loading[cooldownKey(alvo, 'atualizar')] = true;
     try {
-      const ok = await verificarStatus();
-      if (ok) return;
-      const data = await state.json('/api/whatsapp/qrcode');
-      if (data.cooldownAte) iniciarCooldown('qr', data.cooldownAte, data.cooldownMs || state.cooldownMs.qr);
-      if (data.conectado) {
-        await verificarStatus();
-        return setLinha('Esse numero ja aparece conectado por aqui.', 'ok');
-      }
-      if (!data.base64) return setLinha('Nao recebi um QR valido dessa sessao agora.', 'warn');
-      mostrarQr(data.base64);
-      setLinha('QR pronto. Pode escanear que eu acompanho daqui.', 'ok');
-      iniciarPoll();
-    } catch (error) {
-      setLinha(error.message || 'Falha ao abrir QR.', 'warn');
+      const data = await state.json(`/api/whatsapp/alvos/${alvo}/status`);
+      aplicarCooldown(alvo, 'atualizar', data.cooldownAte, data.cooldownMs || 3000);
+      state.alvos = state.alvos.map((item) => item.alvo === alvo ? data : item);
     } finally {
-      delete $('waBtnGerar').dataset.loading;
-      delete $('waBtnAtualizar').dataset.loading;
-      atualizarAcoes();
+      delete state.loading[cooldownKey(alvo, 'atualizar')];
+      render();
     }
   }
 
-  async function reconectar() {
-    if (segundosRestantes('reconectar') > 0) return setLinha(`So mais ${segundosRestantes('reconectar')}s para reconectar com seguranca.`);
-    $('waBtnReconectar').dataset.loading = '1';
-    $('waBtnReconectar').disabled = true;
+  async function abrirQr(alvo) {
+    state.loading[cooldownKey(alvo, 'qr')] = true;
     try {
-      const data = await state.json('/api/whatsapp/reconectar', { method: 'POST' });
-      if (data.cooldownAte) iniciarCooldown('reconectar', data.cooldownAte, data.cooldownMs || state.cooldownMs.reconectar);
-      if (data.conectado) {
-        await verificarStatus();
-        return setLinha('A sessao voltou conectada sem precisar abrir um novo QR.', 'ok');
-      }
-      if (!data.base64) return setLinha('Nao recebi um novo QR dessa sessao.', 'warn');
-      mostrarQr(data.base64);
-      state.conectado = false;
-      setLinha('Sessao reiniciada. QR novo gerado.', 'ok');
-      iniciarPoll();
-    } catch (error) {
-      setLinha(error.message || 'Falha ao reconectar a sessao.', 'warn');
+      const data = await state.json(`/api/whatsapp/alvos/${alvo}/qrcode`);
+      state.qr[alvo] = data;
+      aplicarCooldown(alvo, 'qr', data.cooldownAte, data.cooldownMs || 8000);
+      await atualizarAlvo(alvo);
     } finally {
-      delete $('waBtnReconectar').dataset.loading;
-      atualizarAcoes();
+      delete state.loading[cooldownKey(alvo, 'qr')];
+      render();
     }
   }
 
-  function iniciarPoll() {
-    pararPoll();
-    state.pollTimer = setInterval(() => {
-      verificarStatus().catch(() => undefined);
-    }, 3000);
-  }
-
-  function pararPoll() {
-    if (!state.pollTimer) return;
-    clearInterval(state.pollTimer);
-    state.pollTimer = null;
+  async function reconectar(alvo) {
+    state.loading[cooldownKey(alvo, 'reconectar')] = true;
+    try {
+      const data = await state.json(`/api/whatsapp/alvos/${alvo}/reconectar`, { method: 'POST' });
+      state.qr[alvo] = data;
+      aplicarCooldown(alvo, 'reconectar', data.cooldownAte, data.cooldownMs || 15000);
+      await atualizarAlvo(alvo);
+    } finally {
+      delete state.loading[cooldownKey(alvo, 'reconectar')];
+      render();
+    }
   }
 
   function bind() {
-    $('waBtnGerar').addEventListener('click', () => carregarQr());
-    $('waBtnAtualizar').addEventListener('click', () => verificarStatus().catch((error) => setLinha(error.message || 'Falha ao consultar status.', 'warn')));
-    $('waBtnReconectar').addEventListener('click', () => reconectar());
+    $('waTargets').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-wa-action]');
+      if (!button) return;
+      const alvo = button.getAttribute('data-wa-target');
+      const acao = button.getAttribute('data-wa-action');
+      if (!alvo || !acao) return;
+      if (acao === 'atualizar') return atualizarAlvo(alvo).catch(() => undefined);
+      if (acao === 'qr') return abrirQr(alvo).catch(() => undefined);
+      if (acao === 'reconectar') return reconectar(alvo).catch(() => undefined);
+      return undefined;
+    });
+  }
+
+  function startPolling() {
+    if (state.timer) clearInterval(state.timer);
+    state.timer = setInterval(() => {
+      if (Object.keys(state.loading).length > 0) return;
+      carregarAlvos().catch(() => undefined);
+    }, 30000);
   }
 
   function start() {
     state.json = window.PhoneMonitorPage?.json?.bind(window.PhoneMonitorPage) || window.IagmxPainelAuth?.json;
     state.contexto = window.PhoneMonitorPage?.getContext?.() || null;
     if (!state.json) return;
-    if (!podeVer()) {
-      esconderPainel();
-      return;
-    }
-    if (state.contexto?.usuario?.perfil !== 'admin') $('waBtnReconectar').hidden = true;
+    if (!podeVer()) return esconderPainel();
     bind();
-    atualizarAcoes();
-    verificarStatus()
-      .then((ok) => { if (!ok) return carregarQr(); return null; })
-      .catch((error) => setLinha(error.message || 'Falha ao iniciar painel do WhatsApp.', 'warn'));
+    carregarAlvos().catch((error) => {
+      const box = $('waGlobalNotice');
+      if (!box) return;
+      box.className = 'result-box warn';
+      box.textContent = error?.message || 'Falha ao carregar os alvos WhatsApp.';
+    });
+    startPolling();
   }
 
   let started = false;
