@@ -14,9 +14,15 @@
 5. O contrato atual do auxiliar esta semanticamente errado: “abrir QR da conexao atual” promete algo impossivel quando o estado real e `stale_open`.
 
 ## Evidence Log
-- A coletar via Debug Server, logs do app e requests reproduzidos manualmente.
+- `GET /api/whatsapp/alvos/auxiliar_teste/qrcode` reproduziu `503`, depois `GET /status` manteve `stale_open`, e nova tentativa de `qrcode` caiu em `429`.
+- Dentro do container do app, a Evolution retornou:
+  - `GET /instance/connectionState/gmx-atendimento-v2` => `{"state":"connecting"}`
+  - `GET /instance/connect/gmx-atendimento-v2` => `{"count":0}`
+  - `GET /instance/fetchInstances` => `connectionStatus:"open"` com `disconnectionReasonCode:401`
+- `DELETE /instance/logout/gmx-atendimento-v2` no auxiliar retornou `500 Error: Connection Closed`, confirmando que a sessao residual esta travada no upstream.
+- Pos-fix: `GET /api/whatsapp/alvos/auxiliar_teste/qrcode` passou a retornar `409` com mensagem operacional explicita, sem cair para `429` na repeticao imediata.
+- Pos-fix: `GET /api/whatsapp/alvos/oficial_gmx/qrcode` continuou retornando `200` com `base64`.
 
 ## Next Steps
-1. Subir Debug Server da sessao.
-2. Confirmar hipoteses com logs de `status`, `qrcode` e chamadas Evolution do auxiliar.
-3. So depois aplicar a menor correcao possivel.
+1. Validar visualmente no `/phone` que o botao do auxiliar fica bloqueado com mensagem honesta.
+2. Se o usuario confirmar, limpar a instrumentacao temporaria desta sessao.

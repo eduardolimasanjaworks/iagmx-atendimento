@@ -22,10 +22,10 @@ const COOLDOWN_MS = {
   reconectar: 15000,
 } as const;
 
-const ULTIMA_ACAO: Record<keyof typeof COOLDOWN_MS, number> = {
-  status: 0,
-  qrcode: 0,
-  reconectar: 0,
+const ULTIMA_ACAO: Record<keyof typeof COOLDOWN_MS, Record<string, number>> = {
+  status: {},
+  qrcode: {},
+  reconectar: {},
 };
 
 const ROTULO_ACAO: Record<keyof typeof COOLDOWN_MS, string> = {
@@ -107,10 +107,12 @@ function exigirAdmin(req: Parameters<typeof painelAdmin>[0], reply: { status: (c
 
 function aplicarCooldown(
   acao: keyof typeof COOLDOWN_MS,
+  escopo: string,
   reply: { status: (code: number) => { send: (body: unknown) => unknown } },
 ): boolean {
   const agora = Date.now();
-  const restante = ULTIMA_ACAO[acao] + COOLDOWN_MS[acao] - agora;
+  const ultimaAcao = ULTIMA_ACAO[acao][escopo] ?? 0;
+  const restante = ultimaAcao + COOLDOWN_MS[acao] - agora;
   if (restante > 0) {
     reply.status(429).send({
       erro: `Aguarde ${Math.ceil(restante / 1000)}s antes de ${ROTULO_ACAO[acao]}.`,
@@ -120,7 +122,7 @@ function aplicarCooldown(
     });
     return false;
   }
-  ULTIMA_ACAO[acao] = agora;
+  ULTIMA_ACAO[acao][escopo] = agora;
   return true;
 }
 
@@ -135,15 +137,16 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
   });
 
   app.get<{ Params: { alvo: string } }>('/api/whatsapp/alvos/:alvo/status', async (req, reply) => {
+    const escopo = `alvo:${req.params.alvo}`;
     reportarDebugWhatsapp(req, 'status', 'entrada', { alvo: req.params.alvo });
     if (!exigirPainel(req, reply)) return;
     if (!obterAlvoWhatsapp(req.params.alvo)) {
       return reply.status(404).send({ erro: 'Alvo WhatsApp não encontrado' });
     }
-    if (!aplicarCooldown('status', reply)) {
+    if (!aplicarCooldown('status', escopo, reply)) {
       reportarDebugWhatsapp(req, 'status', 'cooldown', {
         alvo: req.params.alvo,
-        ultimoStatusEm: ULTIMA_ACAO.status,
+        ultimoStatusEm: ULTIMA_ACAO.status[escopo] ?? 0,
         cooldownMs: COOLDOWN_MS.status,
       });
       return;
@@ -159,11 +162,12 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
       ...status,
       escopo: 'conexao_dupla_ia',
       cooldownMs: COOLDOWN_MS.status,
-      cooldownAte: new Date(ULTIMA_ACAO.status + COOLDOWN_MS.status).toISOString(),
+      cooldownAte: new Date((ULTIMA_ACAO.status[escopo] ?? Date.now()) + COOLDOWN_MS.status).toISOString(),
     };
   });
 
   app.get<{ Params: { alvo: string } }>('/api/whatsapp/alvos/:alvo/qrcode', async (req, reply) => {
+    const escopo = `alvo:${req.params.alvo}`;
     reportarDebugWhatsapp(req, 'qrcode', 'entrada', { alvo: req.params.alvo });
     if (!exigirPainel(req, reply)) return;
     const alvo = obterAlvoWhatsapp(req.params.alvo);
@@ -173,14 +177,6 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
     if (!alvo.permiteQr) {
       return reply.status(403).send({ erro: 'Este alvo nao permite abrir QR por este painel.' });
     }
-    if (!aplicarCooldown('qrcode', reply)) {
-      reportarDebugWhatsapp(req, 'qrcode', 'cooldown', {
-        alvo: req.params.alvo,
-        ultimoQrEm: ULTIMA_ACAO.qrcode,
-        cooldownMs: COOLDOWN_MS.qrcode,
-      });
-      return;
-    }
     const status = await obterStatusConexaoPorNome(req.params.alvo);
     reportarDebugWhatsapp(req, 'qrcode', 'permitido', {
       alvo: req.params.alvo,
@@ -189,6 +185,26 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
       podeEnviarAntesQr: status.podeEnviar,
       permiteReconectar: alvo.permiteReconectar,
     });
+    if (status.state === 'stale_open' && !alvo.permiteReconectar) {
+      return reply.status(409).send({
+        erro:
+          'Este numero auxiliar ficou preso em uma sessao residual da Evolution e nao consegue abrir QR sem reset operacional. Como a reconexao do auxiliar e bloqueada neste painel, nao ha QR disponivel aqui agora.',
+        alvo: req.params.alvo,
+        escopo: 'conexao_dupla_ia',
+        state: status.state,
+        permiteReconectar: alvo.permiteReconectar,
+        motivoOperacional:
+          'Use o numero oficial para operacao normal ou faca o reset do auxiliar fora deste painel quando quiser parear esse numero de teste novamente.',
+      });
+    }
+    if (!aplicarCooldown('qrcode', escopo, reply)) {
+      reportarDebugWhatsapp(req, 'qrcode', 'cooldown', {
+        alvo: req.params.alvo,
+        ultimoQrEm: ULTIMA_ACAO.qrcode[escopo] ?? 0,
+        cooldownMs: COOLDOWN_MS.qrcode,
+      });
+      return;
+    }
     if (status.conectado) {
       return {
         conectado: true,
@@ -196,7 +212,7 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
         mensagem: 'WhatsApp ja conectado',
         alvo: req.params.alvo,
         cooldownMs: COOLDOWN_MS.qrcode,
-        cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+        cooldownAte: new Date((ULTIMA_ACAO.qrcode[escopo] ?? Date.now()) + COOLDOWN_MS.qrcode).toISOString(),
       };
     }
     const qr = await obterQrCodePorNome(req.params.alvo);
@@ -221,8 +237,20 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
           mensagem: 'WhatsApp ja conectado',
           alvo: req.params.alvo,
           cooldownMs: COOLDOWN_MS.qrcode,
-          cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+          cooldownAte: new Date((ULTIMA_ACAO.qrcode[escopo] ?? Date.now()) + COOLDOWN_MS.qrcode).toISOString(),
         };
+      }
+      if (statusAtualizado.state === 'stale_open' && !alvo.permiteReconectar) {
+        return reply.status(409).send({
+          erro:
+            'A Evolution nao gerou QR para o numero auxiliar porque a sessao residual ainda esta travada. Neste painel o reset do auxiliar fica bloqueado, entao nao ha como recuperar este QR por aqui.',
+          alvo: req.params.alvo,
+          escopo: 'conexao_dupla_ia',
+          state: statusAtualizado.state,
+          permiteReconectar: alvo.permiteReconectar,
+          motivoOperacional:
+            'Se precisar testar com este numero auxiliar, faca primeiro um reset operacional fora do painel. Aqui dentro, use o numero oficial para reconectar.',
+        });
       }
       return reply.status(503).send({ erro: 'QR code não disponível. Tente reconectar.', alvo: req.params.alvo });
     }
@@ -234,11 +262,12 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
       alvo: req.params.alvo,
       escopo: 'conexao_dupla_ia',
       cooldownMs: COOLDOWN_MS.qrcode,
-      cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+      cooldownAte: new Date((ULTIMA_ACAO.qrcode[escopo] ?? Date.now()) + COOLDOWN_MS.qrcode).toISOString(),
     };
   });
 
   app.post<{ Params: { alvo: string } }>('/api/whatsapp/alvos/:alvo/reconectar', async (req, reply) => {
+    const escopo = `alvo:${req.params.alvo}`;
     reportarDebugWhatsapp(req, 'reconectar', 'entrada', { alvo: req.params.alvo });
     if (!exigirAdmin(req, reply)) return;
     const alvo = obterAlvoWhatsapp(req.params.alvo);
@@ -248,7 +277,7 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
     if (!alvo.permiteReconectar) {
       return reply.status(403).send({ erro: 'Este numero nao pode ser reconectado por este painel.' });
     }
-    if (!aplicarCooldown('reconectar', reply)) {
+    if (!aplicarCooldown('reconectar', escopo, reply)) {
       reportarDebugWhatsapp(req, 'reconectar', 'cooldown', { alvo: req.params.alvo });
       return;
     }
@@ -262,7 +291,7 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
         alvo: req.params.alvo,
         escopo: 'conexao_dupla_ia',
         cooldownMs: COOLDOWN_MS.reconectar,
-        cooldownAte: new Date(ULTIMA_ACAO.reconectar + COOLDOWN_MS.reconectar).toISOString(),
+        cooldownAte: new Date((ULTIMA_ACAO.reconectar[escopo] ?? Date.now()) + COOLDOWN_MS.reconectar).toISOString(),
       });
     }
     return {
@@ -276,15 +305,16 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
       escopo: 'conexao_dupla_ia',
       estavaConectado: status.conectado,
       cooldownMs: COOLDOWN_MS.reconectar,
-      cooldownAte: new Date(ULTIMA_ACAO.reconectar + COOLDOWN_MS.reconectar).toISOString(),
+      cooldownAte: new Date((ULTIMA_ACAO.reconectar[escopo] ?? Date.now()) + COOLDOWN_MS.reconectar).toISOString(),
     };
   });
 
   /** Status da conexão */
   app.get('/api/whatsapp/status', async (req, reply) => {
+    const escopo = 'legacy:status';
     reportarDebugWhatsapp(req, 'status', 'entrada');
     if (!exigirPainel(req, reply)) return;
-    if (!aplicarCooldown('status', reply)) {
+    if (!aplicarCooldown('status', escopo, reply)) {
       reportarDebugWhatsapp(req, 'status', 'cooldown');
       return;
     }
@@ -305,15 +335,16 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
         'Esta rota controla apenas a conexao atual da IA neste servidor. A integracao futura com outro servidor deve ficar separada ate a virada planejada.',
       preparadoServidorExterno: config.whatsappChatwootFuturoHabilitado,
       cooldownMs: COOLDOWN_MS.status,
-      cooldownAte: new Date(ULTIMA_ACAO.status + COOLDOWN_MS.status).toISOString(),
+      cooldownAte: new Date((ULTIMA_ACAO.status[escopo] ?? Date.now()) + COOLDOWN_MS.status).toISOString(),
     };
   });
 
   /** QR code em base64 (data:image/png;base64,...) */
   app.get('/api/whatsapp/qrcode', async (req, reply) => {
+    const escopo = 'legacy:qrcode';
     reportarDebugWhatsapp(req, 'qrcode', 'entrada');
     if (!exigirPainel(req, reply)) return;
-    if (!aplicarCooldown('qrcode', reply)) {
+    if (!aplicarCooldown('qrcode', escopo, reply)) {
       reportarDebugWhatsapp(req, 'qrcode', 'cooldown');
       return;
     }
@@ -330,7 +361,7 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
         base64: null,
         mensagem: 'WhatsApp ja conectado',
         cooldownMs: COOLDOWN_MS.qrcode,
-        cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+        cooldownAte: new Date((ULTIMA_ACAO.qrcode[escopo] ?? Date.now()) + COOLDOWN_MS.qrcode).toISOString(),
       };
     }
     const qr = await obterQrCode();
@@ -352,7 +383,7 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
           base64: null,
           mensagem: 'WhatsApp ja conectado',
           cooldownMs: COOLDOWN_MS.qrcode,
-          cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+          cooldownAte: new Date((ULTIMA_ACAO.qrcode[escopo] ?? Date.now()) + COOLDOWN_MS.qrcode).toISOString(),
         };
       }
       return reply.status(503).send({ erro: 'QR code não disponível. Tente reconectar.' });
@@ -364,15 +395,16 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
       instancia: config.whatsappIaInstance,
       escopo: 'conexao_ativa_da_ia',
       cooldownMs: COOLDOWN_MS.qrcode,
-      cooldownAte: new Date(ULTIMA_ACAO.qrcode + COOLDOWN_MS.qrcode).toISOString(),
+      cooldownAte: new Date((ULTIMA_ACAO.qrcode[escopo] ?? Date.now()) + COOLDOWN_MS.qrcode).toISOString(),
     };
   });
 
   /** Força logout e gera novo QR */
   app.post('/api/whatsapp/reconectar', async (req, reply) => {
+    const escopo = 'legacy:reconectar';
     reportarDebugWhatsapp(req, 'reconectar', 'entrada');
     if (!exigirAdmin(req, reply)) return;
-    if (!aplicarCooldown('reconectar', reply)) {
+    if (!aplicarCooldown('reconectar', escopo, reply)) {
       reportarDebugWhatsapp(req, 'reconectar', 'cooldown');
       return;
     }
@@ -396,7 +428,7 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
         instancia: config.whatsappIaInstance,
         escopo: 'conexao_ativa_da_ia',
         cooldownMs: COOLDOWN_MS.reconectar,
-        cooldownAte: new Date(ULTIMA_ACAO.reconectar + COOLDOWN_MS.reconectar).toISOString(),
+        cooldownAte: new Date((ULTIMA_ACAO.reconectar[escopo] ?? Date.now()) + COOLDOWN_MS.reconectar).toISOString(),
       });
     }
     return {
@@ -409,7 +441,7 @@ export async function rotasWhatsapp(app: FastifyInstance): Promise<void> {
       escopo: 'conexao_ativa_da_ia',
       estavaConectado: status.conectado,
       cooldownMs: COOLDOWN_MS.reconectar,
-      cooldownAte: new Date(ULTIMA_ACAO.reconectar + COOLDOWN_MS.reconectar).toISOString(),
+      cooldownAte: new Date((ULTIMA_ACAO.reconectar[escopo] ?? Date.now()) + COOLDOWN_MS.reconectar).toISOString(),
     };
   });
 }

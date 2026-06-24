@@ -10,6 +10,7 @@
     contexto: null,
     alvos: [],
     qr: {},
+    feedback: {},
     cooldown: {},
     loading: {},
     timer: null,
@@ -70,9 +71,20 @@
     if (Number.isFinite(limite)) state.cooldown[cooldownKey(alvo, acao)] = limite;
   }
 
+  function qrBloqueadoNoPainel(item) {
+    return item?.state === 'stale_open' && item?.permiteReconectar === false;
+  }
+
+  function dadosResiduais(item) {
+    return !item?.conectado && (item?.state === 'stale_open' || item?.podeEnviar === false);
+  }
+
   function htmlQr(item) {
     const qr = state.qr[item.alvo];
     if (item.conectado && !qr?.base64) return '<div class="qr-placeholder">Conectado nesta instancia.</div>';
+    if (qrBloqueadoNoPainel(item)) {
+      return '<div class="qr-placeholder">Este alvo auxiliar ficou preso em uma sessao residual da Evolution. Voce ainda pode clicar para ver a explicacao operacional, mas estes dados nao valem como conexao ativa.</div>';
+    }
     if (qr?.base64) {
       const src = qr.base64.startsWith('data:') ? qr.base64 : `data:image/png;base64,${qr.base64}`;
       return `<img alt="QR ${item.titulo}" src="${src}" />`;
@@ -106,14 +118,15 @@
           <span class="${badgeClass(item)}">${traduzirStatus(item)}</span>
         </div>
         <div class="wa-meta-grid">
-          <div class="wa-meta-card"><div class="wa-meta-label">Numero conectado</div><div class="wa-meta-value">${formatarNumero(item.numeroConectado)}</div></div>
+          <div class="wa-meta-card"><div class="wa-meta-label">${dadosResiduais(item) ? 'Ultimo numero visto' : 'Numero conectado'}</div><div class="wa-meta-value">${dadosResiduais(item) && !item.numeroConectado ? 'Sem conexao valida' : formatarNumero(item.numeroConectado)}</div></div>
           <div class="wa-meta-card"><div class="wa-meta-label">Instancia atual</div><div class="wa-meta-value">${item.instance || 'Aguardando leitura'}</div></div>
-          <div class="wa-meta-card"><div class="wa-meta-label">Ultima atualizacao</div><div class="wa-meta-value">${formatarData(item.atualizadoEm)}</div></div>
+          <div class="wa-meta-card"><div class="wa-meta-label">${dadosResiduais(item) ? 'Ultimo registro residual' : 'Ultima atualizacao'}</div><div class="wa-meta-value">${formatarData(item.atualizadoEm)}</div></div>
         </div>
         <div class="wa-note-box">
-          <div class="wa-note-line">${item.nomePerfil ? `Perfil conectado: ${item.nomePerfil}` : 'O nome do perfil ainda nao foi informado por esta conexao.'}</div>
+          <div class="wa-note-line">${item.nomePerfil ? `${dadosResiduais(item) ? 'Ultimo perfil visto' : 'Perfil conectado'}: ${item.nomePerfil}` : 'O nome do perfil ainda nao foi informado por esta conexao.'}</div>
           <div class="wa-note-line">Ultima verificacao feita no painel: ${new Date().toLocaleString('pt-BR')}</div>
           <div class="wa-note-line">${item.motivoDesconexao || item.aviso || 'Sem observacoes adicionais para este alvo.'}</div>
+          ${state.feedback[item.alvo] ? `<div class="wa-note-line"><strong>Aviso operacional:</strong> ${state.feedback[item.alvo]}</div>` : ''}
         </div>
         <div class="qr-box">
           <div class="qr-frame">${htmlQr(item)}</div>
@@ -124,7 +137,7 @@
           </div>
           <div class="wa-help-box">
             <div><code>Verificar agora se conectou</code> so confere o estado atual deste alvo.</div>
-            <div><code>Abrir QR da conexao atual</code> tenta abrir o pareamento sem derrubar a sessao.</div>
+            <div><code>Abrir QR da conexao atual</code> tenta abrir o pareamento sem derrubar a sessao. Se a Evolution travar o auxiliar, o painel responde com aviso operacional em vez de fingir sucesso.</div>
             <div><code>Desconectar e gerar novo QR</code> ${item.permiteReconectar ? 'fica liberado neste alvo.' : 'nao fica liberado neste alvo.'}</div>
           </div>
         </div>
@@ -143,6 +156,7 @@
     state.loading[cooldownKey(alvo, 'atualizar')] = true;
     try {
       const data = await state.json(`/api/whatsapp/alvos/${alvo}/status`);
+      delete state.feedback[alvo];
       aplicarCooldown(alvo, 'atualizar', data.cooldownAte, data.cooldownMs || 3000);
       state.alvos = state.alvos.map((item) => item.alvo === alvo ? data : item);
     } finally {
@@ -156,8 +170,12 @@
     try {
       const data = await state.json(`/api/whatsapp/alvos/${alvo}/qrcode`);
       state.qr[alvo] = data;
+      delete state.feedback[alvo];
       aplicarCooldown(alvo, 'qr', data.cooldownAte, data.cooldownMs || 8000);
       await atualizarAlvo(alvo);
+    } catch (error) {
+      state.qr[alvo] = null;
+      state.feedback[alvo] = error?.message || 'Nao foi possivel abrir o QR deste alvo.';
     } finally {
       delete state.loading[cooldownKey(alvo, 'qr')];
       render();
@@ -169,8 +187,11 @@
     try {
       const data = await state.json(`/api/whatsapp/alvos/${alvo}/reconectar`, { method: 'POST' });
       state.qr[alvo] = data;
+      delete state.feedback[alvo];
       aplicarCooldown(alvo, 'reconectar', data.cooldownAte, data.cooldownMs || 15000);
       await atualizarAlvo(alvo);
+    } catch (error) {
+      state.feedback[alvo] = error?.message || 'Nao foi possivel reconectar este alvo.';
     } finally {
       delete state.loading[cooldownKey(alvo, 'reconectar')];
       render();
@@ -184,9 +205,9 @@
       const alvo = button.getAttribute('data-wa-target');
       const acao = button.getAttribute('data-wa-action');
       if (!alvo || !acao) return;
-      if (acao === 'atualizar') return atualizarAlvo(alvo).catch(() => undefined);
-      if (acao === 'qr') return abrirQr(alvo).catch(() => undefined);
-      if (acao === 'reconectar') return reconectar(alvo).catch(() => undefined);
+      if (acao === 'atualizar') return atualizarAlvo(alvo);
+      if (acao === 'qr') return abrirQr(alvo);
+      if (acao === 'reconectar') return reconectar(alvo);
       return undefined;
     });
   }
