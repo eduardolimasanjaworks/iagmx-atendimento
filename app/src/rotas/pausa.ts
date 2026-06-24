@@ -9,8 +9,12 @@ import {
   despausarContato,
   obterStatusPausa,
 } from '../servicos/pausa.js';
-import { painelAdmin } from '../servicos/painel-acesso.js';
+import { painelAdmin, painelAutenticado } from '../servicos/painel-acesso.js';
 import { normalizarTelefone } from '../util/telefone.js';
+
+function verificarLeitura(req: FastifyRequest): boolean {
+  return painelAutenticado(req);
+}
 
 function verificarAdmin(req: FastifyRequest): boolean {
   return painelAdmin(req);
@@ -18,7 +22,7 @@ function verificarAdmin(req: FastifyRequest): boolean {
 
 export async function rotasPausa(app: FastifyInstance): Promise<void> {
   app.get('/api/pausa', async (req, reply) => {
-    if (!verificarAdmin(req)) {
+    if (!verificarLeitura(req)) {
       return reply.status(401).send({ erro: 'Não autorizado' });
     }
     return obterStatusPausa();

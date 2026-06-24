@@ -13,6 +13,7 @@ import { tentarAtualizacaoDados, estaEmAtualizacaoDados } from './fluxo-atualiza
 import { tentarFluxoCarreta, estaEmFluxoCarreta } from './fluxo-carreta.js';
 import { tentarFluxoCanhoto } from './fluxo-canhoto.js';
 import { tentarFluxoNegociacao } from './fluxo-negociacao.js';
+import { tentarConsultaDocumentos } from './consulta-documentos.js';
 import type { ItemDebounce } from '../tipos/evolution.js';
 import { extrairOfertaGmX } from './ferramentas-contexto.js';
 import { avaliarSeDeveResponder } from './linguagem-motorista-runtime.js';
@@ -175,6 +176,9 @@ export async function rotearMensagem(opts: {
 
   const canhoto = await tentarFluxoCanhoto({ telefone, mensagem, historico, itens });
   if (canhoto) return respostaProgramatica('cadastro', canhoto);
+
+  const consultaDocumentos = await tentarConsultaDocumentos({ telefone, mensagem });
+  if (consultaDocumentos) return respostaProgramatica('cadastro', consultaDocumentos);
 
   if (PERGUNTA_PAGAMENTO.test(mensagem) && !temOfertaAtiva(historico)) {
     return respostaProgramatica('pagamento', {
