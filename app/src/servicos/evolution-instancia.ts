@@ -4,6 +4,7 @@
 import { resolverStatusEvolution } from './evolution-status.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { obterQrCodeComResetDeterministico } from './evolution-reset.js';
+import { garantirWebhookEvolution } from './evolution-webhook.js';
 import {
   listarAlvosWhatsapp,
   obterAlvoWhatsapp,
@@ -106,6 +107,7 @@ function extrairNumeroConectado(inst?: InstanciaEvolution | null): string | null
 
 /** Estado da conexão WhatsApp */
 async function obterStatusConexaoPorAlvo(alvo: AlvoWhatsapp): Promise<StatusConexao> {
+  await garantirWebhookEvolution(alvo).catch(() => undefined);
   const url = `${alvo.url}/instance/connectionState/${alvo.instancia}`;
   const res = await fetch(url, { headers: headers(alvo.apiKey), signal: AbortSignal.timeout(15000) });
   if (res.status === 404) {
@@ -265,6 +267,7 @@ export interface QrCodeResposta {
 
 /** Gera ou atualiza QR code para pareamento */
 async function obterQrCodePorAlvo(alvo: AlvoWhatsapp): Promise<QrCodeResposta> {
+  await garantirWebhookEvolution(alvo, { forcar: true });
   const url = `${alvo.url}/instance/connect/${alvo.instancia}`;
   const res = await fetch(url, { headers: headers(alvo.apiKey), signal: AbortSignal.timeout(30000) });
   if (!res.ok) {
@@ -312,6 +315,7 @@ export async function obterQrCodeDeterministicoPorNome(nome: string): Promise<Qr
 
 /** Desconecta sessão e gera novo QR */
 async function reconectarPorAlvo(alvo: AlvoWhatsapp): Promise<QrCodeResposta> {
+  await garantirWebhookEvolution(alvo, { forcar: true });
   const logoutUrl = `${alvo.url}/instance/logout/${alvo.instancia}`;
   await fetch(logoutUrl, {
     method: 'DELETE',
