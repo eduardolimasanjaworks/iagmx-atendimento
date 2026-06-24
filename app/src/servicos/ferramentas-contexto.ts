@@ -5,6 +5,8 @@ import type { BlocoFerramenta } from './ferramentas.js';
 import { serializarBlocoFerramenta } from './ferramentas.js';
 import {
   extrairValorMonetario,
+  motoristaAceitou,
+  motoristaRecusou,
   obterFaixaNegociacao,
   type FaixaNegociacao,
 } from './motor-negociacao.js';
@@ -32,21 +34,38 @@ export function extrairOfertaGmX(
 ): OfertaGmX | null {
   const ultimaGmx = [...historico]
     .reverse()
-    .find((h) => h.role === 'assistant' && /retirada|entrega|valor\s+R\$/i.test(h.content));
+    .find((h) => h.role === 'assistant' && /(retirada|entrega|temos\s+carga|valor\s*:?\s*R\$)/i.test(h.content));
   if (!ultimaGmx) return null;
 
   const texto = ultimaGmx.content;
-  const m = texto.match(
+  const formatoNovo = texto.match(
+    /temos\s+carga\s+(.+?)\s*->\s*(.+?)(?:\n|,|\r\n)+\s*(?:operacao:\s*(.+?)(?:\n|,|\r\n)+)?\s*valor:\s*R\$\s*([\d.,]+)/i,
+  );
+  if (formatoNovo) {
+    const valor = parseFloat(formatoNovo[4].replace(/\./g, '').replace(',', '.'));
+    if (!Number.isFinite(valor)) return null;
+    return {
+      origem: formatoNovo[1].trim(),
+      destino: formatoNovo[2].trim(),
+      valor,
+      texto,
+      operacao: formatoNovo[3]?.trim() || undefined,
+      capacidade: undefined,
+      configRotaId: null,
+    };
+  }
+
+  const formatoLegado = texto.match(
     /retirada\s+(.+?),\s*entrega\s+(.+?),\s*valor\s+R\$\s*([\d.,]+)/i,
   );
-  if (!m) return null;
+  if (!formatoLegado) return null;
 
-  const valor = parseFloat(m[3].replace(/\./g, '').replace(',', '.'));
+  const valor = parseFloat(formatoLegado[3].replace(/\./g, '').replace(',', '.'));
   if (!Number.isFinite(valor)) return null;
 
   return {
-    origem: m[1].trim(),
-    destino: m[2].trim(),
+    origem: formatoLegado[1].trim(),
+    destino: formatoLegado[2].trim(),
     valor,
     texto,
     operacao: undefined,
@@ -100,13 +119,8 @@ function motoristaCarregado(historico: Array<{ role: string; content: string }>)
 }
 
 function inferirAceiteOferta(mensagem: string): boolean | null {
-  const m = mensagem.toLowerCase();
-  if (/\b(n[aã]o\s+rola|recuso|longe|sem\s+interesse|n[aã]o\s+topo|passo)\b/.test(m)) {
-    return false;
-  }
-  if (/\b(topo|fechado|aceito|confirmo|pode\s+ser|bora|sim|fecho)\b/.test(m)) {
-    return true;
-  }
+  if (motoristaRecusou(mensagem)) return false;
+  if (motoristaAceitou(mensagem)) return true;
   return null;
 }
 

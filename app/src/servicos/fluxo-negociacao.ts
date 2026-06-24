@@ -112,7 +112,7 @@ export async function tentarFluxoNegociacao(opts: {
 
     await limparEstadoFluxo(telefone);
     return montarResultado(
-      `Perfeito parceiro, frete fechado em R$ ${valorAceito.toLocaleString('pt-BR')}, boa viagem`,
+      `Boa parceiro, curti seu interesse, deixei registrado em R$ ${valorAceito.toLocaleString('pt-BR')} e sigo daqui com a equipe`,
       [
         {
           ferramenta: 'resposta_oferta_carga',
@@ -151,7 +151,7 @@ export async function tentarFluxoNegociacao(opts: {
   if (acao.tipo === 'aceite') {
     await limparEstadoFluxo(telefone);
     return montarResultado(
-      `Fechado parceiro em R$ ${acao.valorAceito.toLocaleString('pt-BR')}, boa viagem`,
+      `Boa parceiro, fechamos em R$ ${acao.valorAceito.toLocaleString('pt-BR')}, ja deixei seu interesse registrado aqui`,
       [
         {
           ferramenta: 'resposta_oferta_carga',

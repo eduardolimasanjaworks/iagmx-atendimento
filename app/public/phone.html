@@ -62,6 +62,18 @@
         <label for="mensagemInicial">Mensagem inicial</label>
         <textarea id="mensagemInicial"></textarea>
       </div>
+      <div id="journeyOfferFields" class="grid-2" style="margin-top:.9rem" hidden>
+        <div class="field">
+          <label for="journeyOfferRoute">Rota da oferta C5</label>
+          <select id="journeyOfferRoute"></select>
+          <div class="muted" id="journeyOfferMeta">Selecione uma rota real para montar o convite.</div>
+        </div>
+        <div class="field">
+          <label for="journeyOfferValue">Valor ofertado no disparo</label>
+          <input id="journeyOfferValue" type="number" min="0" step="1" />
+          <div class="muted">A mensagem inicial e a negociacao usam esse valor como abertura.</div>
+        </div>
+      </div>
       <div class="checks">
         <label><input id="resetarHistorico" type="checkbox" checked />Limpar historico operacional antes de iniciar</label>
         <label><input id="marcarComoTeste" type="checkbox" checked />Marcar cadastro com tag padronizada em observacao</label>

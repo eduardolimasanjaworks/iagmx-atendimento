@@ -5,7 +5,7 @@
  */
 (() => {
   const $ = (id) => document.getElementById(id);
-  const state = { json: null, jornadas: [] };
+  const state = { json: null, jornadas: [], rotasOferta: [], previewSeq: 0 };
 
   function normalizarTelefone(valor) {
     return String(valor || '').replace(/\D/g, '');
@@ -48,9 +48,76 @@
     return state.jornadas.find((item) => item.id === $('jornada').value) || null;
   }
 
+  function jornadaEhOferta() {
+    return $('jornada')?.value === 'cenario_5_oferta';
+  }
+
+  function rotaOfertaAtual() {
+    return state.rotasOferta.find((item) => String(item.id) === $('journeyOfferRoute')?.value) || null;
+  }
+
+  function descreverRotaOferta(rota) {
+    if (!rota) return 'Selecione uma rota real para montar o convite.';
+    return `#${rota.id} · ${rota.origem} -> ${rota.destino}${rota.operacao ? ` · ${rota.operacao}` : ''} · min ${Number(rota.valor_minimo).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} · max ${Number(rota.valor_maximo).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}`;
+  }
+
+  function renderRotasOferta() {
+    const select = $('journeyOfferRoute');
+    if (!select) return;
+    const atual = select.value;
+    select.innerHTML = state.rotasOferta
+      .map((item) => `<option value="${item.id}">#${item.id} · ${item.origem} -> ${item.destino}${item.operacao ? ` · ${item.operacao}` : ''}</option>`)
+      .join('');
+    if (atual && state.rotasOferta.some((item) => String(item.id) === atual)) {
+      select.value = atual;
+    }
+  }
+
+  async function atualizarPreviewOferta() {
+    if (!jornadaEhOferta()) return;
+    const rota = rotaOfertaAtual();
+    if (!rota) {
+      $('journeyOfferMeta').textContent = 'Nenhuma rota ativa encontrada em config_rotas.';
+      return;
+    }
+    if (!$('journeyOfferValue').value) $('journeyOfferValue').value = String(Number(rota.valor_minimo || 0));
+    const seq = ++state.previewSeq;
+    $('journeyOfferMeta').textContent = 'Carregando rota e mensagem reais do backend...';
+    try {
+      const data = await state.json('/api/admin/jornadas-teste/oferta-preview', {
+        method: 'POST',
+        body: JSON.stringify({
+          configRotaId: rota.id,
+          valorOfertado: $('journeyOfferValue').value || rota.valor_minimo,
+        }),
+      });
+      if (seq !== state.previewSeq) return;
+      $('mensagemInicial').value = data.mensagem || '';
+      $('journeyOfferMeta').textContent = descreverRotaOferta(data.rota || rota);
+    } catch (error) {
+      if (seq !== state.previewSeq) return;
+      $('journeyOfferMeta').textContent = error.message || 'Falha ao montar a oferta da rota selecionada.';
+    }
+  }
+
   function atualizarMensagemPadrao() {
     const jornada = jornadaAtual();
-    if (jornada) $('mensagemInicial').value = jornada.mensagemPadrao || '';
+    $('journeyOfferFields').hidden = !jornadaEhOferta();
+    if (!jornada) return;
+    if (!jornadaEhOferta()) {
+      $('mensagemInicial').value = jornada.mensagemPadrao || '';
+      $('journeyOfferMeta').textContent = 'Selecione uma rota real para montar o convite.';
+      return;
+    }
+    if (!state.rotasOferta.length) {
+      $('mensagemInicial').value = jornada.mensagemPadrao || '';
+      $('journeyOfferMeta').textContent = 'Nenhuma rota ativa encontrada em config_rotas.';
+      return;
+    }
+    if (!$('journeyOfferRoute').value) $('journeyOfferRoute').value = String(state.rotasOferta[0].id);
+    const rota = rotaOfertaAtual();
+    if (rota && !$('journeyOfferValue').value) $('journeyOfferValue').value = String(Number(rota.valor_minimo || 0));
+    atualizarPreviewOferta().catch((error) => setBox('journeyStatus', error.message || 'Falha ao montar a oferta', 'warn'));
   }
 
   function resumoResultado(resultado) {
@@ -70,7 +137,9 @@
   async function carregarJornadas() {
     const data = await state.json('/api/admin/jornadas-teste');
     state.jornadas = data.jornadas || [];
+    state.rotasOferta = data.rotasOferta || [];
     $('jornada').innerHTML = state.jornadas.map((item) => `<option value="${item.id}">Cenario ${item.cenario} - ${item.titulo}</option>`).join('');
+    renderRotasOferta();
     atualizarMensagemPadrao();
     setBox('journeyStatus', `Jornadas carregadas: ${state.jornadas.length}\n${data.observacaoCampoTeste || ''}`);
   }
@@ -78,6 +147,9 @@
   async function iniciarJornada() {
     const telefone = telefoneAtual();
     if (!telefone) return setBox('journeyStatus', 'Informe o telefone do topo antes de iniciar a jornada', 'warn');
+    if (jornadaEhOferta() && !rotaOfertaAtual()) {
+      return setBox('journeyStatus', 'Selecione uma rota real antes de iniciar a jornada C5', 'warn');
+    }
     const btn = $('iniciarBtn');
     btn.disabled = true;
     setBox('journeyStatus', 'Iniciando jornada com envio imediato no WhatsApp...');
@@ -89,6 +161,8 @@
           jornadaId: $('jornada').value,
           nomeMotorista: $('nomeMotorista').value.trim() || undefined,
           mensagemInicial: $('mensagemInicial').value.trim(),
+          configRotaId: jornadaEhOferta() ? rotaOfertaAtual()?.id : undefined,
+          valorOfertado: jornadaEhOferta() ? $('journeyOfferValue').value.trim() : undefined,
           resetarHistorico: $('resetarHistorico').checked,
           marcarComoTeste: $('marcarComoTeste').checked,
         }),
@@ -116,6 +190,14 @@
   function conectarEventos() {
     document.querySelectorAll('[data-panel]').forEach((btn) => btn.addEventListener('click', () => ativarPainel(btn.dataset.panel)));
     $('jornada').addEventListener('change', atualizarMensagemPadrao);
+    $('journeyOfferRoute').addEventListener('change', () => {
+      const rota = rotaOfertaAtual();
+      if (rota) $('journeyOfferValue').value = String(Number(rota.valor_minimo || 0));
+      atualizarPreviewOferta().catch((error) => setBox('journeyStatus', error.message || 'Falha ao atualizar rota', 'warn'));
+    });
+    $('journeyOfferValue').addEventListener('input', () => {
+      atualizarPreviewOferta().catch((error) => setBox('journeyStatus', error.message || 'Falha ao atualizar valor da oferta', 'warn'));
+    });
     $('iniciarBtn').addEventListener('click', iniciarJornada);
     $('recarregarJornadasBtn').addEventListener('click', () => carregarJornadas().catch((error) => setBox('journeyStatus', error.message || 'Falha ao recarregar jornadas', 'warn')));
     $('trainingOpenEditorBtn').addEventListener('click', () => ativarPainel('editorPanel'));

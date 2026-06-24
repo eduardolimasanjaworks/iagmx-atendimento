@@ -97,6 +97,29 @@ function parseRegrasRota(rota?: Partial<ConfigRotaGmx> | null): RegrasOperaciona
   };
 }
 
+async function lerRotasAtivas(): Promise<ConfigRotaGmx[]> {
+  if (!config.directusToken || !config.directusUrl) return [];
+  const url = `${config.directusUrl}/items/config_rotas?filter[ativo][_eq]=true&limit=5000`;
+  const res = await fetch(url, { headers: headersDirectus(), signal: AbortSignal.timeout(15000) });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { data?: ConfigRotaGmx[] };
+  return (body.data ?? []).map((rota) => ({
+    ...rota,
+    regras_operacionais: parseRegrasRota(rota),
+  }));
+}
+
+export async function listarConfigRotasAtivas(): Promise<ConfigRotaGmx[]> {
+  const lista = await lerRotasAtivas();
+  return [...lista].sort((a, b) => {
+    const origem = a.origem.localeCompare(b.origem, 'pt-BR');
+    if (origem !== 0) return origem;
+    const destino = a.destino.localeCompare(b.destino, 'pt-BR');
+    if (destino !== 0) return destino;
+    return String(a.operacao || '').localeCompare(String(b.operacao || ''), 'pt-BR');
+  });
+}
+
 /** Busca rota por origem/destino/operação (operação exata normalizada). */
 export async function buscarConfigRota(opts: {
   id?: number | string | null;
@@ -120,15 +143,7 @@ export async function buscarConfigRota(opts: {
     return { ...rota, regras_operacionais: parseRegrasRota(rota) };
   }
 
-  const url = `${config.directusUrl}/items/config_rotas?filter[ativo][_eq]=true&limit=5000`;
-  const res = await fetch(url, { headers: headersDirectus(), signal: AbortSignal.timeout(15000) });
-  if (!res.ok) return null;
-
-  const body = (await res.json()) as { data?: ConfigRotaGmx[] };
-  const lista = (body.data ?? []).map((rota) => ({
-    ...rota,
-    regras_operacionais: parseRegrasRota(rota),
-  }));
+  const lista = await lerRotasAtivas();
   const alvo = chaveRotaOperacional({
     origem: opts.origem ?? '',
     destino: opts.destino ?? '',

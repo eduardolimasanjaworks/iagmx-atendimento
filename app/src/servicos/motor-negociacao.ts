@@ -188,7 +188,9 @@ export function motoristaRecusou(mensagem: string): boolean {
 
 export function motoristaAceitou(mensagem: string): boolean {
   const t = mensagem.toLowerCase();
-  return /\b(topo|fechado|aceito|confirmo|pode\s+ser|bora|fecho|fechou|combinado)\b/.test(t);
+  return /\b(topo|fechado|aceito|confirmo|pode\s+ser|bora|fecho|fechou|combinado|tenho\s+interesse|me\s+interessa|quero\s+sim|sim\b|sim\s+tenho)\b/.test(
+    t,
+  );
 }
 
 function valorDentroDaFaixa(valor: number, faixa: FaixaNegociacao): boolean {
