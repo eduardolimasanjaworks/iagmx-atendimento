@@ -45,6 +45,11 @@ import {
   listarTelefonesTreinadores,
 } from '../servicos/treinamento-whatsapp.js';
 import { resumirHistoricoNominalOfertasPorEmbarque } from '../servicos/historico-ofertas-gmx.js';
+import {
+  assumirFilaHumanaOferta,
+  listarFilaHumanaOfertas,
+  resolverFilaHumanaOferta,
+} from '../servicos/oferta-fila-humana.js';
 import type { BlocoEquipe } from '../servicos/config-painel-equipe.js';
 import { painelAdmin, painelAutenticado, painelPodeVer } from '../servicos/painel-acesso.js';
 import { resetarContatoTeste } from '../servicos/reset-contato-teste.js';
@@ -437,6 +442,46 @@ export async function rotasAdmin(app: FastifyInstance): Promise<void> {
         escalonamentos: resumo.escalonamentos,
         aceites: resumo.aceites,
       };
+    },
+  );
+
+  app.get('/api/admin/ofertas/fila-humana', async (req, reply) => {
+    if (!exigirPainel(req, reply)) return;
+    const itens = await listarFilaHumanaOfertas();
+    return { ok: true, itens };
+  });
+
+  app.post<{ Params: { id: string }; Body: { assumido_por?: string } }>(
+    '/api/admin/ofertas/fila-humana/:id/assumir',
+    async (req, reply) => {
+      if (!exigirAdmin(req, reply)) return;
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        return reply.status(400).send({ erro: 'id inválido' });
+      }
+      const item = await assumirFilaHumanaOferta(id, req.body?.assumido_por?.trim() || 'operacao');
+      return { ok: true, item };
+    },
+  );
+
+  app.post<{ Params: { id: string }; Body: { resolucao: string; observacao?: string; owner?: string } }>(
+    '/api/admin/ofertas/fila-humana/:id/resolver',
+    async (req, reply) => {
+      if (!exigirAdmin(req, reply)) return;
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        return reply.status(400).send({ erro: 'id inválido' });
+      }
+      if (!req.body?.resolucao?.trim()) {
+        return reply.status(400).send({ erro: 'resolucao é obrigatória' });
+      }
+      const item = await resolverFilaHumanaOferta({
+        id,
+        resolucao: req.body.resolucao.trim(),
+        observacao: req.body.observacao?.trim() || null,
+        owner: req.body.owner?.trim() || null,
+      });
+      return { ok: true, item };
     },
   );
 

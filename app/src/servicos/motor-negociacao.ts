@@ -5,6 +5,7 @@
 import { buscarConfigRota } from './rotas-gmx.js';
 import { buscarMotoristaPorTelefone } from './motorista-gmx.js';
 import { listarEmbarquesAtivos } from './embarque-motorista.js';
+import { mesmaRotaOperacional } from './rota-operacional.js';
 
 interface OfertaNegociacao {
   origem: string;
@@ -25,6 +26,7 @@ export interface FaixaNegociacao {
   fonte: 'embarque' | 'config_rotas';
   passoNegociacaoModo?: 'proporcional' | 'fixo';
   passoNegociacaoValor?: number;
+  escalarHumanoNoTeto?: boolean;
 }
 
 export interface EstadoNegociacao {
@@ -43,21 +45,6 @@ export type AcaoNegociacao =
 
 const RODADAS_MAX = 3;
 
-function normalizarRota(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .trim();
-}
-
-function rotasCompativeis(a: string, b: string): boolean {
-  const x = normalizarRota(a);
-  const y = normalizarRota(b);
-  if (!x || !y) return false;
-  return x.includes(y) || y.includes(x);
-}
-
 function faixaValida(min: number, max: number): boolean {
   return Number.isFinite(min) && Number.isFinite(max) && min > 0 && max >= min;
 }
@@ -65,14 +52,29 @@ function faixaValida(min: number, max: number): boolean {
 async function faixaDoEmbarqueAtivo(
   telefone: string,
   oferta: OfertaNegociacao,
-): Promise<{ valorMinimo: number; valorMaximo: number; configRotaId?: number | null; passoNegociacaoModo?: 'proporcional' | 'fixo'; passoNegociacaoValor?: number } | null> {
+): Promise<{ valorMinimo: number; valorMaximo: number; configRotaId?: number | null; passoNegociacaoModo?: 'proporcional' | 'fixo'; passoNegociacaoValor?: number; escalarHumanoNoTeto?: boolean } | null> {
   const motorista = await buscarMotoristaPorTelefone(telefone);
   if (!motorista) return null;
 
   const embarques = await listarEmbarquesAtivos(motorista.id);
   for (const e of embarques) {
-    if (!rotasCompativeis(e.origin ?? '', oferta.origem)) continue;
-    if (!rotasCompativeis(e.destination ?? '', oferta.destino)) continue;
+    if (
+      !mesmaRotaOperacional(
+        {
+          origem: e.origin ?? '',
+          destino: e.destination ?? '',
+          operacao: e.operacao ?? null,
+        },
+        {
+          origem: oferta.origem,
+          destino: oferta.destino,
+          operacao: oferta.operacao ?? null,
+          capacidade: oferta.capacidade ?? null,
+        },
+      )
+    ) {
+      continue;
+    }
 
     const valorMinimo = Number(e.valor_minimo);
     const valorMaximo = Number(e.valor_maximo);
@@ -85,6 +87,7 @@ async function faixaDoEmbarqueAtivo(
         configRotaId,
         passoNegociacaoModo: rota?.regras_operacionais?.passo_negociacao_modo,
         passoNegociacaoValor: rota?.regras_operacionais?.passo_negociacao_valor,
+        escalarHumanoNoTeto: rota?.regras_operacionais?.escalar_humano_no_teto,
       };
     }
   }
@@ -112,6 +115,7 @@ export async function obterFaixaNegociacao(
         fonte: 'embarque',
         passoNegociacaoModo: emb.passoNegociacaoModo,
         passoNegociacaoValor: emb.passoNegociacaoValor,
+        escalarHumanoNoTeto: emb.escalarHumanoNoTeto,
       };
     }
   }
@@ -138,6 +142,7 @@ export async function obterFaixaNegociacao(
         fonte: 'config_rotas',
         passoNegociacaoModo: rota.regras_operacionais?.passo_negociacao_modo,
         passoNegociacaoValor: rota.regras_operacionais?.passo_negociacao_valor,
+        escalarHumanoNoTeto: rota.regras_operacionais?.escalar_humano_no_teto,
       };
     }
   }
@@ -234,7 +239,7 @@ export function avaliarNegociacao(opts: {
 
     if (valorMsg > faixa.valorMaximo) {
       const rodadas = estado.rodadas + 1;
-      if (rodadas >= RODADAS_MAX) {
+      if (rodadas >= RODADAS_MAX && faixa.escalarHumanoNoTeto !== false) {
         return {
           tipo: 'escalonar',
           motivo: 'negociacao_acima_teto',
@@ -274,6 +279,13 @@ export function avaliarNegociacao(opts: {
     const proposta = Math.min(faixa.valorMaximo, Math.min(valorMsg, atual + passo));
 
     if (rodadas >= RODADAS_MAX && proposta < valorMsg) {
+      if (faixa.escalarHumanoNoTeto === false) {
+        return {
+          tipo: 'contraproposta_ia',
+          valorProposto: faixa.valorMaximo,
+          mensagem: `Entendi os R$ ${formatarValor(valorMsg)} parceiro, o máximo que consigo nessa rota é R$ ${formatarValor(faixa.valorMaximo)}, topa?`,
+        };
+      }
       return {
         tipo: 'contraproposta_ia',
         valorProposto: faixa.valorMaximo,

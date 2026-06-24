@@ -6,6 +6,7 @@ import { directusUploadArquivo, directusAssetUrl } from './directus.js';
 import { buscarMotoristaPorTelefone } from './motorista-gmx.js';
 import type { MidiaCacheada } from './midia-cache.js';
 import { espelharMidiaWhatsappNoDrive } from './google-drive-motorista.js';
+import { mesmaRotaOperacional } from './rota-operacional.js';
 
 export interface EmbarqueAtivo {
   id: number | string;
@@ -70,15 +71,6 @@ export async function obterEmbarqueAtivoPrincipal(telefone: string): Promise<Emb
   return lista[0] ?? null;
 }
 
-function normalizarTrecho(texto?: string | null): string {
-  return String(texto ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 export async function resolverEmbarqueAtivoPorTelefone(opts: {
   telefone: string;
   embarqueId?: string | number | null;
@@ -94,15 +86,19 @@ export async function resolverEmbarqueAtivoPorTelefone(opts: {
   if (ativos.length === 0) return null;
   if (ativos.length === 1) return ativos[0];
 
-  const origem = normalizarTrecho(opts.origem);
-  const destino = normalizarTrecho(opts.destino);
-  if (origem || destino) {
+  if (opts.origem || opts.destino) {
     const candidatos = ativos.filter((item) => {
-      const origemItem = normalizarTrecho(item.origin);
-      const destinoItem = normalizarTrecho(item.destination);
-      const origemOk = !origem || origemItem.includes(origem) || origem.includes(origemItem);
-      const destinoOk = !destino || destinoItem.includes(destino) || destino.includes(destinoItem);
-      return origemOk && destinoOk;
+      return mesmaRotaOperacional(
+        {
+          origem: item.origin,
+          destino: item.destination,
+          operacao: item.operacao ?? null,
+        },
+        {
+          origem: opts.origem ?? null,
+          destino: opts.destino ?? null,
+        },
+      );
     });
     if (candidatos.length === 1) return candidatos[0];
   }

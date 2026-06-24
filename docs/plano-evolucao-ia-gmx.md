@@ -13,10 +13,10 @@
 | Campo | Valor |
 |-------|--------|
 | **IA em produção** | 🔴 PAUSADA (global) — incidente fila 2026-06-15 |
-| **Próxima tarefa** | `C1.5` — enriquecer diff, autor e rollback das edições |
-| **Bloqueio atual** | Orquestração parcial: prompt principal e OCR no Postgres, mas camadas críticas ainda hardcoded |
+| **Próxima tarefa** | `B4.3` — fechar estado real da oferta, lock por motorista, fila humana e regras/geo auditáveis |
+| **Bloqueio atual** | Validar fluxo manual ponta a ponta no portal com casos reais escalados; schema novo já aplicado no Directus e backend/frontend ajustados |
 | **Plano disparo ERP** | F1–F3 ✅ · F4 ⚠️ · F5 ✅ · F6 ❌ → ver [plano-disparo-ofertas-gmx.md](./plano-disparo-ofertas-gmx.md) |
-| **Última atualização** | 2026-06-16 (simulador visual + trilha de orquestração viva) |
+| **Última atualização** | 2026-06-24 (auditoria multimotoristas convertida em plano de correção executável) |
 
 ### Progresso geral
 
@@ -259,6 +259,7 @@ Relatórios salvos em: `scripts/relatorios-simulacao/`
 | 2026-06-16 | C1.3 OCR fallback | `OCR_PROMPT_FORCADO` também saiu do hardcode operacional e passou a ser persistido na `configuracao`, com leitura no retry de OCR | C1.4 |
 | 2026-06-16 | C1.4 concluído | mensagens de disponibilidade, cadastro, atualização documental, canhoto e OCR humano passaram a ser lidas de `configuracao.mensagens_fluxo`, com editor JSON inicial no portal | C1.5 |
 | 2026-06-16 | C1.5 iniciado | backend ganhou `configuracao_historico` com registro de mudanças em prompt, OCR, orquestração e mensagens de fluxo; portal passou a listar antes/depois recentes | C1.5 |
+| 2026-06-24 | B4.3 executado | backend ganhou estado real da oferta, lock por telefone, fila humana, match exato e geocodificação futura; portal passou a exibir fila humana; schema novo aplicado no Directus | validar demo multimotoristas |
 | 2026-06-16 | C1.4 parcial | mensagens de disponibilidade, cadastro, atualização documental e OCR humano passaram a ser lidas de `configuracao.mensagens_fluxo`, com editor JSON inicial no portal | C1.4 |
 | 2026-06-16 | C1.2 + portal | `CAMADA_HUMANA` e `instrucaoFormatacao` passaram a ter configuração persistida em Postgres com editor no portal; simulador agora lê prompts, traces e inventário de hardcoded vs Postgres | C1.3 |
 | 2026-06-16 | Trilha C + simulador | portal ganhou simulador visual; inventário mostrou `prompt_sistema` e `prompt_ocr` no Postgres, mas `CAMADA_HUMANA`, `instrucaoFormatacao`, `OCR_PROMPT_FORCADO` e textos de fluxo ainda hardcoded; trilha C criada para orquestração viva e professor via WhatsApp | C1.2 |

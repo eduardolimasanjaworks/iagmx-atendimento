@@ -2,6 +2,9 @@
  * Consulta rotas de negociação no Directus GMX (portal /root/gmx).
  */
 import { config } from '../config.js';
+import { chaveRotaOperacional } from './rota-operacional.js';
+
+type RegrasOperacionais = NonNullable<ConfigRotaGmx['regras_operacionais']>;
 
 export interface ConfigRotaGmx {
   id: number;
@@ -13,11 +16,17 @@ export interface ConfigRotaGmx {
   valor_maximo: number;
   ativo?: boolean;
   evidencia?: string | null;
+  preferencia_proximidade?: 'agora' | 'coleta' | null;
+  gps_max_horas?: number | string | null;
+  passo_negociacao_modo?: 'proporcional' | 'fixo' | null;
+  passo_negociacao_valor?: number | string | null;
+  escalar_humano_no_teto?: boolean | null;
   regras_operacionais?: {
     preferencia_proximidade?: 'agora' | 'coleta';
     gps_max_horas?: number;
     passo_negociacao_modo?: 'proporcional' | 'fixo';
     passo_negociacao_valor?: number;
+    escalar_humano_no_teto?: boolean;
   };
 }
 
@@ -35,16 +44,7 @@ function headersDirectus() {
   };
 }
 
-function normalizar(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function parseRegrasRota(raw?: string | null): ConfigRotaGmx['regras_operacionais'] {
+function parseRegrasLegado(raw?: string | null): RegrasOperacionais {
   const texto = String(raw ?? '').trim();
   if (!texto.startsWith('GMX_RULES::')) return {};
   try {
@@ -57,10 +57,44 @@ function parseRegrasRota(raw?: string | null): ConfigRotaGmx['regras_operacionai
         parsed.passo_negociacao_modo === 'fixo' ? 'fixo' : parsed.passo_negociacao_modo === 'proporcional' ? 'proporcional' : undefined,
       passo_negociacao_valor:
         Number.isFinite(Number(parsed.passo_negociacao_valor)) ? Number(parsed.passo_negociacao_valor) : undefined,
+      escalar_humano_no_teto:
+        parsed.escalar_humano_no_teto === true ? true : undefined,
     };
   } catch {
     return {};
   }
+}
+
+function parseRegrasRota(rota?: Partial<ConfigRotaGmx> | null): RegrasOperacionais {
+  const legado = parseRegrasLegado(rota?.evidencia);
+  return {
+    preferencia_proximidade:
+      rota?.preferencia_proximidade === 'agora'
+        ? 'agora'
+        : rota?.preferencia_proximidade === 'coleta'
+          ? 'coleta'
+          : legado.preferencia_proximidade,
+    gps_max_horas:
+      Number.isFinite(Number(rota?.gps_max_horas)) && Number(rota?.gps_max_horas) > 0
+        ? Number(rota?.gps_max_horas)
+        : legado.gps_max_horas,
+    passo_negociacao_modo:
+      rota?.passo_negociacao_modo === 'fixo'
+        ? 'fixo'
+        : rota?.passo_negociacao_modo === 'proporcional'
+          ? 'proporcional'
+          : legado.passo_negociacao_modo,
+    passo_negociacao_valor:
+      Number.isFinite(Number(rota?.passo_negociacao_valor)) && Number(rota?.passo_negociacao_valor) > 0
+        ? Number(rota?.passo_negociacao_valor)
+        : legado.passo_negociacao_valor,
+    escalar_humano_no_teto:
+      rota?.escalar_humano_no_teto === false
+        ? false
+        : rota?.escalar_humano_no_teto === true
+          ? true
+          : legado.escalar_humano_no_teto,
+  };
 }
 
 /** Busca rota por origem/destino/operação (operação exata normalizada). */
@@ -83,7 +117,7 @@ export async function buscarConfigRota(opts: {
     const body = (await res.json()) as { data?: ConfigRotaGmx };
     const rota = body.data ?? null;
     if (!rota || rota.ativo === false) return null;
-    return { ...rota, regras_operacionais: parseRegrasRota(rota.evidencia) };
+    return { ...rota, regras_operacionais: parseRegrasRota(rota) };
   }
 
   const url = `${config.directusUrl}/items/config_rotas?filter[ativo][_eq]=true&limit=5000`;
@@ -93,23 +127,23 @@ export async function buscarConfigRota(opts: {
   const body = (await res.json()) as { data?: ConfigRotaGmx[] };
   const lista = (body.data ?? []).map((rota) => ({
     ...rota,
-    regras_operacionais: parseRegrasRota(rota.evidencia),
+    regras_operacionais: parseRegrasRota(rota),
   }));
-  const o = normalizar(opts.origem ?? '');
-  const d = normalizar(opts.destino ?? '');
-  const op = opts.operacao ? normalizar(opts.operacao) : '';
-  const cap = opts.capacidade ? normalizar(opts.capacidade) : '';
+  const alvo = chaveRotaOperacional({
+    origem: opts.origem ?? '',
+    destino: opts.destino ?? '',
+    operacao: opts.operacao ?? null,
+    capacidade: opts.capacidade ?? null,
+  });
 
   const match = lista.find((r) => {
-    const ro = normalizar(r.origem);
-    const rd = normalizar(r.destino);
-    const rop = r.operacao ? normalizar(r.operacao) : '';
-    const rcap = r.capacidade ? normalizar(r.capacidade) : '';
-    const origemOk = ro.includes(o) || o.includes(ro);
-    const destinoOk = rd.includes(d) || d.includes(rd);
-    const opOk = !op || !rop || rop === op;
-    const capOk = !cap || !rcap || rcap.includes(cap) || cap.includes(rcap);
-    return origemOk && destinoOk && opOk && capOk;
+    const chave = chaveRotaOperacional({
+      origem: r.origem,
+      destino: r.destino,
+      operacao: r.operacao ?? null,
+      capacidade: r.capacidade ?? null,
+    });
+    return chave === alvo;
   });
 
   return match ?? null;
@@ -147,6 +181,7 @@ Regras:
 - Preferencia de proximidade: ${rota.regras_operacionais?.preferencia_proximidade === 'agora' ? 'local atual' : 'local na data de coleta'}
 - GPS maximo aceito: ${rota.regras_operacionais?.gps_max_horas ?? 24}h
 - Degrau de negociacao: ${rota.regras_operacionais?.passo_negociacao_modo === 'fixo' ? `fixo de R$ ${(rota.regras_operacionais?.passo_negociacao_valor ?? 100).toFixed(0)}` : 'proporcional à faixa'}
+- Escalar humano no teto: ${rota.regras_operacionais?.escalar_humano_no_teto === false ? 'nao' : 'sim'}
 - Se motorista contrapropõe, suba GRADUALMENTE dentro da faixa (não pule direto pro máximo)
 - Após 3 rodadas sem acordo ou pedido abaixo do mínimo: use ferramenta escalonar_negociacao e pause`;
 }

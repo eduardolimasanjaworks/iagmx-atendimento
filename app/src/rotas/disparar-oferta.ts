@@ -10,13 +10,14 @@ import { adicionarAoHistorico } from '../servicos/historico.js';
 import { telefoneParaJid, normalizarTelefone } from '../util/telefone.js';
 import { marcarEnvioIa } from '../servicos/envio-ia.js';
 import { logEvento } from '../util/log-eventos.js';
-import { directusPatch } from '../servicos/directus.js';
 import {
   novoEventoHistoricoId,
   registrarEventoHistoricoOferta,
 } from '../servicos/historico-ofertas-gmx.js';
 import { iniciarSimulacaoOferta } from '../servicos/simulacao-ofertas.js';
 import { simulacaoAtivaParaTelefone } from '../servicos/simulacao-cenario.js';
+import { adquirirLockOferta, liberarLockOfertaPorTelefone } from '../servicos/oferta-lock.js';
+import { marcarEmbarqueOfertado } from '../servicos/oferta-status-embarque.js';
 
 function verificarAdmin(req: FastifyRequest): boolean {
   if (!config.adminKey) return true;
@@ -67,12 +68,33 @@ export async function rotasDispararOferta(app: FastifyInstance): Promise<void> {
 
     const remoteJid = telefoneParaJid(telefone);
     const eventId = novoEventoHistoricoId();
-    const envio = await tentarEnviarResposta(telefone, texto, config.evolutionInstance, {
-      remoteJid,
-      mensagensEntrada: 0,
-      origem: 'evolution',
-      agendarAtrasoInicial: false,
+    const lock = await adquirirLockOferta({
+      telefone,
+      embarqueId: body.embarque_id,
+      motoristaId: body.motorista_id ?? null,
+      origem: body.origem.trim(),
+      destino: body.destino.trim(),
     });
+    if (!lock.ok) {
+      return reply.status(409).send({
+        ok: false,
+        enviado: false,
+        motivo: 'motorista_ja_em_oferta_ativa',
+        lock: lock.atual,
+      });
+    }
+    let envio;
+    try {
+      envio = await tentarEnviarResposta(telefone, texto, config.evolutionInstance, {
+        remoteJid,
+        mensagensEntrada: 0,
+        origem: 'evolution',
+        agendarAtrasoInicial: false,
+      });
+    } catch (error) {
+      await liberarLockOfertaPorTelefone(telefone).catch(() => undefined);
+      throw error;
+    }
 
     if (envio.enviado) {
       const telefoneSimulado = await simulacaoAtivaParaTelefone(telefone);
@@ -95,12 +117,12 @@ export async function rotasDispararOferta(app: FastifyInstance): Promise<void> {
         observacao: telefoneSimulado ? '__GMX_SIMULACAO_NAO_ENVIAR__oferta_disparada__' : null,
       }).catch(() => undefined);
       if (body.embarque_id != null) {
-        await directusPatch('embarques', body.embarque_id, {
-          oferta_disparada_em: new Date().toISOString(),
-          rota_status: 'ofertado',
-          ...(body.config_rota_id != null ? { config_rota_id: Number(body.config_rota_id) } : {}),
-          ...(body.motorista_id != null ? { oferta_motorista_id: Number(body.motorista_id) } : {}),
-        }).catch(() => undefined);
+        await marcarEmbarqueOfertado({
+          embarqueId: body.embarque_id,
+          configRotaId: body.config_rota_id ?? null,
+          motoristaId: body.motorista_id ?? null,
+          valorOfertado: Number(body.valor_ofertado),
+        });
       }
       logEvento('oferta', 'Disparo autorizado enviado', {
         telefone,
@@ -123,6 +145,7 @@ export async function rotasDispararOferta(app: FastifyInstance): Promise<void> {
         }).catch(() => undefined);
       }
     } else {
+      await liberarLockOfertaPorTelefone(telefone).catch(() => undefined);
       logEvento(
         'oferta',
         'Disparo falhou — fila ou WhatsApp desconectado',

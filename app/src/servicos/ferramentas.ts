@@ -345,6 +345,13 @@ async function executarFerramenta(
         local_liberacao_prevista: dados.local_liberacao_prevista as string | undefined,
         latitude: dados.latitude as number | undefined,
         longitude: dados.longitude as number | undefined,
+        local_liberacao_prevista_latitude:
+          dados.local_liberacao_prevista_latitude as number | undefined,
+        local_liberacao_prevista_longitude:
+          dados.local_liberacao_prevista_longitude as number | undefined,
+        local_liberacao_prevista_fonte:
+          dados.local_liberacao_prevista_fonte as string | undefined,
+        gps_timestamp: dados.gps_timestamp as string | undefined,
         data_previsao_disponibilidade: dados.data_previsao_disponibilidade as string | undefined,
       });
 

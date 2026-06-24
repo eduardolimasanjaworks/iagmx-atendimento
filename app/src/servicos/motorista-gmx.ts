@@ -14,6 +14,13 @@ import type { MidiaCacheada } from './midia-cache.js';
 import { espelharMidiaWhatsappNoDrive } from './google-drive-motorista.js';
 import { resolverMapeamentoOcr } from './config-ocr-documentos.js';
 import { registrarOcrPendenteGmx } from './ocr-pendencias-gmx.js';
+import { coordenadasGps, geocodificarLocalTexto } from './geocodificacao-local.js';
+import {
+  marcarEmbarqueAceito,
+  marcarEmbarqueRecusado,
+} from './oferta-status-embarque.js';
+import { resolverFilaHumanaOferta } from './oferta-fila-humana.js';
+import { liberarLockOfertaPorTelefone } from './oferta-lock.js';
 
 /** Primeiro toque no WhatsApp — ainda não comprovou ser motorista */
 export const STATUS_CONTATO_WHATSAPP = 'CONTATO WHATSAPP';
@@ -160,6 +167,10 @@ export async function registrarDisponibilidade(dados: {
   local_liberacao_prevista?: string;
   latitude?: number;
   longitude?: number;
+  local_liberacao_prevista_latitude?: number;
+  local_liberacao_prevista_longitude?: number;
+  local_liberacao_prevista_fonte?: string;
+  gps_timestamp?: string;
   data_previsao_disponibilidade?: string;
   observacao?: string;
 }): Promise<Record<string, unknown>> {
@@ -176,6 +187,18 @@ export async function registrarDisponibilidade(dados: {
   const statusErp =
     dados.status ??
     (dados.disponivel === false ? 'carregado' : 'disponivel');
+  const gpsAtual = coordenadasGps(dados.latitude, dados.longitude);
+  const localPrevisto =
+    dados.local_liberacao_prevista ?? dados.local_disponibilidade ?? dados.localizacao_atual;
+  const geocodedPrev =
+    dados.local_liberacao_prevista_latitude != null && dados.local_liberacao_prevista_longitude != null
+      ? {
+          latitude: Number(dados.local_liberacao_prevista_latitude),
+          longitude: Number(dados.local_liberacao_prevista_longitude),
+          fonte: String(dados.local_liberacao_prevista_fonte ?? 'manual'),
+          geocodedAt: new Date().toISOString(),
+        }
+      : await geocodificarLocalTexto(localPrevisto);
 
   const payload: Record<string, unknown> = {
     motorista_id: motorista.id,
@@ -190,6 +213,11 @@ export async function registrarDisponibilidade(dados: {
       dados.local_liberacao_prevista ?? dados.local_disponibilidade ?? dados.localizacao_atual,
     latitude: dados.latitude,
     longitude: dados.longitude,
+    local_liberacao_prevista_latitude: geocodedPrev?.latitude ?? null,
+    local_liberacao_prevista_longitude: geocodedPrev?.longitude ?? null,
+    local_liberacao_prevista_fonte: geocodedPrev?.fonte ?? null,
+    local_liberacao_prevista_geocoded_at: geocodedPrev?.geocodedAt ?? null,
+    gps_timestamp: dados.gps_timestamp ?? gpsAtual?.geocodedAt ?? null,
     data_previsao_disponibilidade: dados.data_previsao_disponibilidade,
     ...(dados.observacao ? { observacao: dados.observacao } : {}),
   };
@@ -224,7 +252,7 @@ export async function buscarUltimaDisponibilidade(
     sort: '-date_updated,-date_created',
     limit: '1',
     fields:
-      'id,motorista_id,disponivel,status,localizacao_atual,local_disponibilidade,local_destino_atual,local_liberacao_prevista,latitude,longitude,data_previsao_disponibilidade,observacao,date_updated,date_created',
+      'id,motorista_id,disponivel,status,localizacao_atual,local_disponibilidade,local_destino_atual,local_liberacao_prevista,latitude,longitude,local_liberacao_prevista_latitude,local_liberacao_prevista_longitude,local_liberacao_prevista_fonte,local_liberacao_prevista_geocoded_at,gps_timestamp,data_previsao_disponibilidade,observacao,date_updated,date_created',
   });
   return lista[0] ?? null;
 }
@@ -588,12 +616,52 @@ export async function registrarRespostaOfertaCarga(dados: {
     observacao: dados.observacao ?? null,
   });
 
-  return directusPost('historico_ofertas', {
+  const registro = (await directusPost('historico_ofertas', {
     status: 'published',
     tipo_evento: 'retorno_motorista',
     match_id: dados.match_id ?? null,
     descricao,
-  });
+  })) as Record<string, unknown>;
+
+  if (dados.embarque_id != null) {
+    if (dados.aceite) {
+      await marcarEmbarqueAceito({
+        embarqueId: dados.embarque_id,
+        motoristaId: dados.motorista_id ?? null,
+        valorAceito: dados.valor_aceito ?? null,
+      });
+    } else if (temContraproposta) {
+      // Mantem o embarque em oferta ativa quando ainda nao houve fechamento.
+    } else {
+      await marcarEmbarqueRecusado({
+        embarqueId: dados.embarque_id,
+        limparMotorista: true,
+      });
+    }
+  }
+
+  const encerraOferta = dados.aceite || !temContraproposta;
+  if (dados.telefone && encerraOferta) {
+    await liberarLockOfertaPorTelefone(dados.telefone).catch(() => undefined);
+  }
+  if (dados.telefone && dados.embarque_id != null && encerraOferta) {
+    const pendentes = await directusListar<{ id: number }>('ofertas_intervencao_humana', {
+      'filter[telefone][_eq]': normalizarTelefone(dados.telefone),
+      'filter[embarque_id][_eq]': String(dados.embarque_id),
+      'filter[status][_in]': 'pendente,assumido',
+      fields: 'id',
+      limit: '1',
+    }).catch(() => []);
+    if (pendentes[0]?.id) {
+      await resolverFilaHumanaOferta({
+        id: pendentes[0].id,
+        resolucao: dados.aceite ? 'aceite_registrado' : 'recusa_registrada',
+        observacao: dados.observacao ?? null,
+      }).catch(() => undefined);
+    }
+  }
+
+  return registro;
 }
 
 /** @deprecated use obterContextoMotoristaCompleto */

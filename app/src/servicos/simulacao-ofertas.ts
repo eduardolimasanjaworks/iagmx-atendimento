@@ -9,10 +9,15 @@ import { adicionarAoHistorico } from './historico.js';
 import { registrarEventoHistoricoOferta } from './historico-ofertas-gmx.js';
 import type { EstadoNegociacao } from './motor-negociacao.js';
 import { atualizarEstadoNegociacao, avaliarNegociacao } from './motor-negociacao.js';
-import { directusPatch } from './directus.js';
 import { salvarEstadoMonitorTelefone } from './monitor-telefone.js';
 import { simulacaoAtivaParaTelefone } from './simulacao-cenario.js';
 import { telefoneParaJid } from '../util/telefone.js';
+import {
+  marcarEmbarqueAceito,
+  marcarEmbarqueAguardandoHumano,
+  marcarEmbarqueRecusado,
+} from './oferta-status-embarque.js';
+import { abrirFilaHumanaOferta } from './oferta-fila-humana.js';
 
 type OfertaSimulada = {
   telefone: string;
@@ -127,9 +132,10 @@ export async function iniciarSimulacaoOferta(opts: OfertaSimulada): Promise<{ ok
         destino: opts.destino,
         observacao: opts.observacaoTag ?? 'simulacao',
       }).catch(() => undefined);
-      await directusPatch('embarques', opts.embarqueId, {
-        rota_status: 'aceito',
-        valor_aceito: faixa.valorOfertado,
+      await marcarEmbarqueAceito({
+        embarqueId: opts.embarqueId,
+        motoristaId: opts.motoristaId ?? null,
+        valorAceito: faixa.valorOfertado,
       }).catch(() => undefined);
       await encerrarOfertaAtiva(keyTimers);
     });
@@ -154,7 +160,10 @@ export async function iniciarSimulacaoOferta(opts: OfertaSimulada): Promise<{ ok
         motivo: 'longe_ou_sem_interesse',
         observacao: opts.observacaoTag ?? 'simulacao',
       }).catch(() => undefined);
-      await directusPatch('embarques', opts.embarqueId, { rota_status: 'recusado' }).catch(() => undefined);
+      await marcarEmbarqueRecusado({
+        embarqueId: opts.embarqueId,
+        limparMotorista: true,
+      }).catch(() => undefined);
       await encerrarOfertaAtiva(keyTimers);
     });
     return { ok: true, simulada: true };
@@ -199,9 +208,10 @@ export async function iniciarSimulacaoOferta(opts: OfertaSimulada): Promise<{ ok
           destino: opts.destino,
           observacao: opts.observacaoTag ?? 'simulacao',
         }).catch(() => undefined);
-        await directusPatch('embarques', opts.embarqueId, {
-          rota_status: 'aceito',
-          valor_aceito: acao2.tipo === 'aceite' ? acao2.valorAceito : faixa.valorOfertado,
+        await marcarEmbarqueAceito({
+          embarqueId: opts.embarqueId,
+          motoristaId: opts.motoristaId ?? null,
+          valorAceito: acao2.tipo === 'aceite' ? acao2.valorAceito : faixa.valorOfertado,
         }).catch(() => undefined);
         await encerrarOfertaAtiva(keyTimers);
       });
@@ -235,7 +245,24 @@ export async function iniciarSimulacaoOferta(opts: OfertaSimulada): Promise<{ ok
           motivo: 'negociacao_acima_teto',
           observacao: opts.observacaoTag ?? 'simulacao',
         }).catch(() => undefined);
-        await directusPatch('embarques', opts.embarqueId, { rota_status: 'aguardando_humano' }).catch(() => undefined);
+        await marcarEmbarqueAguardandoHumano({
+          embarqueId: opts.embarqueId,
+          motoristaId: opts.motoristaId ?? null,
+          motivo: 'negociacao_acima_teto',
+        }).catch(() => undefined);
+        await abrirFilaHumanaOferta({
+          telefone: opts.telefone,
+          embarqueId: opts.embarqueId,
+          motoristaId: opts.motoristaId ?? null,
+          motivo: 'negociacao_acima_teto',
+          valorOfertado: faixa.valorOfertado,
+          valorPedidoMotorista: faixa.valorMaximo + 800,
+          valorMinimo: faixa.valorMinimo,
+          valorMaximo: faixa.valorMaximo,
+          origem: opts.origem,
+          destino: opts.destino,
+          observacao: opts.observacaoTag ?? 'simulacao',
+        }).catch(() => undefined);
         await salvarEstadoMonitorTelefone(opts.telefone, {
           fase: 'fila_pendente',
           mensagem: 'Motorista fake pediu decisão humana',

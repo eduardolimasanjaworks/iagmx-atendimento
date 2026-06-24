@@ -122,6 +122,10 @@ async function criarMotoristaSimulado(opts: {
     local_disponibilidade: localPrev,
     latitude: lat,
     longitude: lng,
+    local_liberacao_prevista_latitude: prevCidade.lat,
+    local_liberacao_prevista_longitude: prevCidade.lng,
+    local_liberacao_prevista_fonte: 'simulacao_seed',
+    gps_timestamp: new Date(estado.simNowMs).toISOString(),
     data_previsao_disponibilidade: previsto ?? undefined,
     observacao,
   });
@@ -226,6 +230,10 @@ async function tickSimulacao() {
       local_disponibilidade: localPrev,
       latitude: lat,
       longitude: lng,
+      local_liberacao_prevista_latitude: destinoPrev.lat,
+      local_liberacao_prevista_longitude: destinoPrev.lng,
+      local_liberacao_prevista_fonte: 'simulacao_tick',
+      gps_timestamp: new Date(agora).toISOString(),
       data_previsao_disponibilidade: previsto ?? undefined,
       observacao: `${TAG_SIMULACAO_MOTORISTAS} tick=${estado.tick}`,
     }).catch(() => undefined);

@@ -8,6 +8,9 @@ import { config } from '../config.js';
 import { logEvento } from '../util/log-eventos.js';
 import { normalizarTelefone } from '../util/telefone.js';
 import { registrarEventoHistoricoOferta } from './historico-ofertas-gmx.js';
+import { abrirFilaHumanaOferta } from './oferta-fila-humana.js';
+import { marcarEmbarqueAguardandoHumano } from './oferta-status-embarque.js';
+import { renovarLockOferta } from './oferta-lock.js';
 
 export async function escalonarNegociacao(opts: {
   telefoneMotorista: string;
@@ -76,6 +79,24 @@ export async function escalonarNegociacao(opts: {
     destino: opts.destino ?? null,
     motivo: opts.motivo,
   }).catch(() => undefined);
+
+  if (opts.embarqueId != null) {
+    await marcarEmbarqueAguardandoHumano({
+      embarqueId: opts.embarqueId,
+      motivo: opts.motivo,
+    }).catch(() => undefined);
+  }
+  await abrirFilaHumanaOferta({
+    telefone: tel,
+    embarqueId: opts.embarqueId ?? null,
+    motivo: opts.motivo,
+    valorPedidoMotorista: opts.valorPedido ?? null,
+    valorMinimo: opts.valorMinimo ?? null,
+    valorMaximo: opts.valorMaximo ?? null,
+    origem: opts.origem ?? null,
+    destino: opts.destino ?? null,
+  }).catch(() => undefined);
+  await renovarLockOferta(tel).catch(() => undefined);
 
   return { pausado: true, notificados };
 }
