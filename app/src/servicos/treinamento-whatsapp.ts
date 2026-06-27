@@ -371,6 +371,27 @@ async function resumirInstrucaoTreinamento(texto: string): Promise<{ instrucao: 
   };
 }
 
+async function classificarIntencaoTreinamento(texto: string): Promise<'aprendizado' | 'patch' | 'pergunta' | 'normal'> {
+  const resposta = await chatCompletionRaw(
+    [
+      {
+        role: 'system',
+        content: 'Voce classifica mensagens de treinadores autorizados de uma IA de atendimento. Responda SOMENTE uma palavra: "aprendizado" se for ensinar uma nova regra/comportamento, "patch" se for editar/corrigir textos existentes, "pergunta" se for perguntar sobre como a IA funciona, ou "normal" para conversa comum.',
+      },
+      {
+        role: 'user',
+        content: texto,
+      },
+    ],
+    { temperature: 0.1, max_tokens: 20 },
+  );
+  const classificacao = resposta.toLowerCase().trim();
+  if (classificacao.includes('aprendizado') || classificacao.includes('regra') || classificacao.includes('comportamento')) return 'aprendizado';
+  if (classificacao.includes('patch') || classificacao.includes('editar') || classificacao.includes('corrigir') || classificacao.includes('substituir')) return 'patch';
+  if (classificacao.includes('pergunta') || classificacao.includes('como') || classificacao.includes('o que')) return 'pergunta';
+  return 'normal';
+}
+
 function parecePedidoDeAprendizado(texto: string): boolean {
   return /(aprenda|aprender|adicione|inclua|grave|guarde|nova regra|regra:|treino:|a partir de agora|sempre|nunca|quando .* voce|mude seu comportamento|quero que voce)/i.test(
     texto,
@@ -423,62 +444,9 @@ export async function processarMensagemTreinamentoWhatsapp(opts: {
   const texto = opts.textoUsuario.trim();
   await adicionarAoHistorico(opts.remoteJid, 'user', texto);
 
-  const pedidoConfirmacaoPatch = matchConfirmacaoPatch(texto);
-  if (pedidoConfirmacaoPatch !== null) {
-    try {
-      const patch =
-        pedidoConfirmacaoPatch > 0
-          ? (await listarPatchesConfiguracaoPendentes()).find((item) => item.id === pedidoConfirmacaoPatch) ?? null
-          : await obterUltimoPatchPendentePorTelefone(opts.telefone);
-      if (!patch || patch.status !== 'pendente') {
-        const resposta = 'Nao encontrei nenhum patch pendente para confirmar agora';
-        await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-        return resposta;
-      }
-      await aprovarPatchConfiguracao(patch.id, normalizarTelefone(opts.telefone));
-      const resposta = `Patch #${patch.id} confirmado e aplicado no alvo ${patch.alvo}${patch.chave_alvo ? `.${patch.chave_alvo}` : ''}`;
-      await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-      return resposta;
-    } catch (error) {
-      const resposta = `Nao consegui confirmar o patch agora: ${error instanceof Error ? error.message : 'falha desconhecida'}`;
-      await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-      return resposta;
-    }
-  }
-
-  const pedidoCancelamentoPatch = matchCancelamentoPatch(texto);
-  if (pedidoCancelamentoPatch !== null) {
-    try {
-      const patch =
-        pedidoCancelamentoPatch > 0
-          ? (await listarPatchesConfiguracaoPendentes()).find((item) => item.id === pedidoCancelamentoPatch) ?? null
-          : await obterUltimoPatchPendentePorTelefone(opts.telefone);
-      if (!patch || patch.status !== 'pendente') {
-        const resposta = 'Nao encontrei nenhum patch pendente para cancelar agora';
-        await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-        return resposta;
-      }
-      await cancelarPatchConfiguracao(patch.id, normalizarTelefone(opts.telefone));
-      const resposta = `Patch #${patch.id} cancelado, nenhuma mudanca estrutural foi aplicada`;
-      await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-      return resposta;
-    } catch (error) {
-      const resposta = `Nao consegui cancelar o patch agora: ${error instanceof Error ? error.message : 'falha desconhecida'}`;
-      await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-      return resposta;
-    }
-  }
-
-  if (/listar.*patch|patch pendente|patches pendentes|o que voce pode editar/i.test(texto)) {
-    const patches = (await listarPatchesConfiguracaoPendentes()).filter((item) => item.status === 'pendente').slice(0, 5);
-    const resposta = patches.length
-      ? `Eu tenho estes patches pendentes agora: ${patches.map((item) => `#${item.id} ${item.resumo}`).join(' | ')}`
-      : 'Nao existe patch pendente agora. Eu posso editar prompt_sistema, orquestracao_texto e mensagens_fluxo.';
-    await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-    return resposta;
-  }
-
-  if (parecePedidoDePatch(texto)) {
+  const intencao = await classificarIntencaoTreinamento(texto);
+  
+  if (intencao === 'patch') {
     try {
       const patch = await criarPropostaPatchConfiguracao({
         texto,
@@ -486,18 +454,8 @@ export async function processarMensagemTreinamentoWhatsapp(opts: {
         nomeAutor: opts.pushName,
         canal: 'whatsapp',
       });
-      const resposta =
-        patch.resposta_treinador ||
-        [
-          `Patch #${patch.id} preparado para ${patch.alvo}${patch.chave_alvo ? `.${patch.chave_alvo}` : ''}.`,
-          `Resumo: ${patch.resumo}`,
-          patch.justificativa ? `Motivo: ${patch.justificativa}` : '',
-          patch.pergunta_confirmacao || `Quer que eu aplique esta troca? Responda "Confirmar patch #${patch.id}" ou "Cancelar patch #${patch.id}"`,
-          `ANTES:\n${patch.preview_antes}`,
-          `DEPOIS:\n${patch.preview_depois}`,
-        ]
-          .filter(Boolean)
-          .join('\n\n');
+      await aprovarPatchConfiguracao(patch.id, normalizarTelefone(opts.telefone));
+      const resposta = `Aplicado: ${patch.resumo}. O alvo ${patch.alvo}${patch.chave_alvo ? `.${patch.chave_alvo}` : ''} foi atualizado.`;
       await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
       return resposta;
     } catch (error) {
@@ -505,51 +463,13 @@ export async function processarMensagemTreinamentoWhatsapp(opts: {
       const detail = (message === 'A proposta veio incompleta para aplicar no treinador' || message === 'Nao consegui estruturar a proposta de patch')
         ? 'O pedido pareceu vago ou a IA não conseguiu interpretar o alvo. Tente ser mais específico sobre o que trocar e onde.'
         : message;
-      const resposta = `Modo treinador ativo sem pausa: nao consegui montar o patch agora por um erro interno, mas voce pode reformular o pedido ou tentar de novo. Detalhe: ${detail}`;
+      const resposta = `Nao consegui aplicar a mudanca: ${detail}. Pode reformular?`;
       await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
       return resposta;
     }
   }
 
-  const pedidoConfirmacao = matchConfirmacao(texto);
-  if (pedidoConfirmacao !== null) {
-    const proposta =
-      pedidoConfirmacao > 0
-        ? await obterPropostaPendentePorId(pedidoConfirmacao)
-        : await obterUltimaPropostaPendentePorTelefone(opts.telefone);
-    if (!proposta || proposta.status !== 'pendente') {
-      const resposta = 'Nao encontrei nenhuma proposta pendente para confirmar agora';
-      await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-      return resposta;
-    }
-    const aprendizado = await aplicarPropostaAprendizado(
-      proposta,
-      normalizarTelefone(opts.telefone),
-    );
-    const resposta =
-      `Proposta #${proposta.id} confirmada, a IA ja passou a usar esta nova regra: ${aprendizado.resumo || aprendizado.instrucao}`;
-    await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-    return resposta;
-  }
-
-  const pedidoCancelamento = matchCancelamento(texto);
-  if (pedidoCancelamento !== null) {
-    const proposta =
-      pedidoCancelamento > 0
-        ? await obterPropostaPendentePorId(pedidoCancelamento)
-        : await obterUltimaPropostaPendentePorTelefone(opts.telefone);
-    if (!proposta || proposta.status !== 'pendente') {
-      const resposta = 'Nao encontrei nenhuma proposta pendente para cancelar agora';
-      await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-      return resposta;
-    }
-    await cancelarPendenciaAprendizadoWhatsapp(proposta.id, normalizarTelefone(opts.telefone));
-    const resposta = `Proposta #${proposta.id} cancelada, nenhuma mudanca foi aplicada ao comportamento da IA`;
-    await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-    return resposta;
-  }
-
-  if (parecePedidoDeAprendizado(texto)) {
+  if (intencao === 'aprendizado') {
     const cleaned = texto.replace(/(aprenda|aprender|adicione|inclua|grave|guarde|nova regra|regra:|treino:|a partir de agora|sempre|nunca|quando .* voce|mude seu comportamento|quero que voce)\s*/i, '').trim();
     const alphanumericCount = cleaned.replace(/[^a-zA-Z0-9À-ÿ]/g, '').length;
     if (alphanumericCount < 5) {
@@ -559,10 +479,10 @@ export async function processarMensagemTreinamentoWhatsapp(opts: {
     }
 
     const { instrucao, resumo } = await resumirInstrucaoTreinamento(texto);
-    const propostaRes = await pool.query<PropostaAprendizadoWhatsapp>(
-      `INSERT INTO whatsapp_aprendizados_pendentes (
-        telefone_autor, nome_autor, instrucao_sugerida, resumo_sugerido, origem_texto, status, atualizado_em
-      ) VALUES ($1, $2, $3, $4, $5, 'pendente', NOW())
+    const aprendizadoRes = await pool.query<AprendizadoWhatsapp>(
+      `INSERT INTO whatsapp_aprendizados (
+        telefone_autor, nome_autor, instrucao, resumo, origem_texto, ativo, atualizado_em
+      ) VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
       RETURNING *`,
       [
         normalizarTelefone(opts.telefone),
@@ -572,18 +492,8 @@ export async function processarMensagemTreinamentoWhatsapp(opts: {
         texto,
       ],
     );
-    const proposta = propostaRes.rows[0];
-    const resposta =
-      `Proposta #${proposta.id} preparada, resumo da mudanca: ${resumo}, se quiser aplicar responda "Confirmar #${proposta.id}", se nao quiser responda "Cancelar #${proposta.id}"`;
-    await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
-    return resposta;
-  }
-
-  if (/pendente|proposta|confirmar o que/i.test(texto)) {
-    const pendencia = await obterUltimaPropostaPendentePorTelefone(opts.telefone);
-    const resposta = pendencia
-      ? `Sua ultima proposta pendente e a #${pendencia.id}: ${pendencia.resumo_sugerido || pendencia.instrucao_sugerida}, para aplicar responda "Confirmar #${pendencia.id}", para descartar responda "Cancelar #${pendencia.id}"`
-      : 'Voce nao tem proposta pendente agora';
+    const aprendizado = aprendizadoRes.rows[0];
+    const resposta = `Regra aplicada: ${resumo || instrucao}. A IA já está usando esta nova instrução.`;
     await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
     return resposta;
   }
@@ -592,10 +502,10 @@ export async function processarMensagemTreinamentoWhatsapp(opts: {
     const aprendizados = await listarAprendizadosWhatsapp();
     const ativos = aprendizados.filter((item) => item.ativo).slice(0, 12);
     const resposta = ativos.length
-      ? `Hoje eu estou usando estas regras ensinadas por WhatsApp: ${ativos
+      ? `Estou usando estas regras: ${ativos
           .map((item, idx) => `${idx + 1}) ${item.resumo || item.instrucao}`)
           .join(' | ')}`
-      : 'Ainda nao existe nenhum aprendizado ativo vindo de telefones autorizados';
+      : 'Ainda não tenho regras personalizadas ativas.';
     await adicionarAoHistorico(opts.remoteJid, 'assistant', resposta);
     return resposta;
   }
@@ -612,8 +522,8 @@ Converse como um operador tecnico claro e objetivo.
 Explique o comportamento atual da IA, incluindo prompt base e aprendizados ativos.
 No modo treinador, nunca diga que vai pausar, escalar para humano ou encerrar por falta de autonomia.
 Se houver erro interno, explique o erro e peca um novo comando sem sair do modo treinador.
-Se o usuario estiver so perguntando, NAO altere regra nenhuma.
-Se o usuario quiser alterar comportamento, diga para mandar a instrucao de forma direta, por exemplo comecando com "Aprenda:" ou "Regra:".
+Se o usuario estiver so perguntando, responda normalmente.
+Se o usuario quiser alterar comportamento, a IA vai aplicar diretamente.
 
 PROMPT BASE ATUAL:
 ${promptAtual}
@@ -623,9 +533,7 @@ ${blocoTreino || 'SEM APRENDIZADOS ADICIONAIS ATIVOS NO MOMENTO'}`,
       ...historico,
       {
         role: 'user',
-        content: parecePerguntaSobrePrompt(texto)
-          ? texto
-          : `Responda a este telefone autorizado sobre como a IA esta configurada e como ele pode ensinar novas regras:\n${texto}`,
+        content: texto,
       },
     ],
     { temperature: 0.25, max_tokens: 420 },

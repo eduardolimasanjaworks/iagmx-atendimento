@@ -222,6 +222,10 @@ async function salvar(documentos: OcrDocumentoConfig[], origem: string): Promise
   return validado;
 }
 
+export async function salvarOcrDocumentos(documentos: OcrDocumentoConfig[], origem: string): Promise<OcrDocumentoConfig[]> {
+  return salvar(documentos, origem);
+}
+
 export async function criarOcrDocumento(item: OcrDocumentoConfig): Promise<OcrDocumentoConfig[]> {
   const docs = await listarOcrDocumentos();
   const novo = nDocumento(item);

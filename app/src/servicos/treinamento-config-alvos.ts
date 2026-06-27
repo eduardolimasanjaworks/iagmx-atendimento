@@ -20,13 +20,19 @@ import {
   salvarPromptOcr,
   salvarPromptOcrForcado,
 } from './config-ocr.js';
+import {
+  listarOcrDocumentos,
+  salvarOcrDocumentos,
+  type OcrDocumentoConfig,
+} from './config-ocr-documentos.js';
 
 export type AlvoPatchTreinamento =
   | 'prompt_sistema'
   | 'orquestracao_texto'
   | 'mensagens_fluxo'
   | 'ocr_prompt'
-  | 'ocr_prompt_forcado';
+  | 'ocr_prompt_forcado'
+  | 'ocr_documentos_schema';
 export type OperacaoPatchTreinamento = 'replace' | 'append' | 'prepend';
 
 export interface PatchTreinamentoAplicavel {
@@ -115,6 +121,11 @@ export async function obterAlvoTreinamentoAtual(
   if (alvo === 'ocr_prompt_forcado') {
     return { alvo, chave: null, textoAtual: await obterPromptOcrForcado() };
   }
+  if (alvo === 'ocr_documentos_schema') {
+    const docs = await listarOcrDocumentos();
+    const texto = JSON.stringify(docs, null, 2);
+    return { alvo, chave: null, textoAtual: texto };
+  }
 
   if (alvo === 'orquestracao_texto') {
     const campo = garantirChaveOrquestracao(chave);
@@ -164,6 +175,15 @@ async function aplicarPatchTreinamentoComTextoAtual(
     await salvarPromptOcrForcado(depois, origem);
     return { alvo: patch.alvo, chave: null, antes: atual.textoAtual, depois };
   }
+  if (patch.alvo === 'ocr_documentos_schema') {
+    try {
+      const docs = JSON.parse(depois) as OcrDocumentoConfig[];
+      await salvarOcrDocumentos(docs, origem);
+      return { alvo: patch.alvo, chave: null, antes: atual.textoAtual, depois };
+    } catch {
+      throw new Error('Schema OCR invalido: JSON malformado');
+    }
+  }
 
   if (patch.alvo === 'orquestracao_texto') {
     const campo = garantirChaveOrquestracao(patch.chave);
@@ -189,3 +209,34 @@ export async function simularPatchTreinamento(
   return { alvo: patch.alvo, chave: atual.chave, antes: atual.textoAtual, depois };
 }
 
+export async function montarResumoAlvosTreinamento(): Promise<string> {
+  const [prompt, orquestracao, mensagens, ocr, ocrForcado, ocrDocumentos] = await Promise.all([
+    obterPromptBruto(),
+    obterConfigOrquestracaoTexto(),
+    obterConfigMensagensFluxo(),
+    obterPromptOcr(),
+    obterPromptOcrForcado(),
+    listarOcrDocumentos(),
+  ]);
+
+  const linhas: string[] = [
+    '=== ALVOS EDITAVEIS PELO TREINADOR ===',
+    '',
+    '1. prompt_sistema - Prompt principal do sistema',
+    '2. orquestracao_texto.camadaHumana - Camada humana de orquestracao',
+    '3. orquestracao_texto.instrucaoFormatacao - Instrucoes de formatacao',
+    '4. ocr_prompt - Prompt de extracao OCR geral',
+    '5. ocr_prompt_forcado - Prompt OCR com tipo forcado',
+    '6. ocr_documentos_schema - Schema de documentos OCR (CNH, CRLV, ANTT, etc)',
+    '',
+    '=== MENSAGENS DE FLUXO DISPONIVEIS ===',
+    ...Object.keys(mensagens).map((chave) => `- mensagens_fluxo.${chave}`),
+    '',
+    '=== DOCUMENTOS OCR COM DICAS DE PROMPT ===',
+    ...ocrDocumentos
+      .filter((doc) => doc.ativo && doc.dicaPrompt)
+      .map((doc) => `- ocr_documentos_schema.${doc.id} (${doc.rotulo}): ${doc.dicaPrompt.slice(0, 80)}...`),
+  ];
+
+  return linhas.join('\n');
+}

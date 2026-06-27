@@ -7,6 +7,7 @@ import { obterConfigMensagensFluxo } from './config-mensagens-fluxo.js';
 import { obterPromptOcr, obterPromptOcrForcado } from './config-ocr.js';
 import { obterConfigOrquestracaoTexto } from './config-orquestracao-texto.js';
 import { obterPromptBruto } from './prompt.js';
+import { listarOcrDocumentos } from './config-ocr-documentos.js';
 import type { AlvoPatchTreinamento } from './treinamento-config-alvos.js';
 
 const STOPWORDS = new Set([
@@ -171,12 +172,13 @@ function pontuarTrecho(
 }
 
 export async function montarCatalogoTrechosTreinamento(): Promise<TrechoCatalogado[]> {
-  const [prompt, orquestracao, mensagens, ocr, ocrForcado] = await Promise.all([
+  const [prompt, orquestracao, mensagens, ocr, ocrForcado, ocrDocumentos] = await Promise.all([
     obterPromptBruto(),
     obterConfigOrquestracaoTexto(),
     obterConfigMensagensFluxo(),
     obterPromptOcr(),
     obterPromptOcrForcado(),
+    listarOcrDocumentos(),
   ]);
   const catalogo: TrechoCatalogado[] = [];
 
@@ -205,6 +207,17 @@ export async function montarCatalogoTrechosTreinamento(): Promise<TrechoCataloga
       rotulo: 'Prompt OCR com Tipo Forcado',
       texto: bloco,
     });
+  }
+
+  for (const doc of ocrDocumentos.filter((d) => d.ativo && d.dicaPrompt)) {
+    for (const bloco of quebrarBlocosTexto(doc.dicaPrompt)) {
+      catalogo.push({
+        alvo: 'ocr_documentos_schema',
+        chave: doc.id,
+        rotulo: `Dica OCR - ${doc.rotulo} (${doc.tipoDocumento})`,
+        texto: bloco,
+      });
+    }
   }
 
   for (const chave of ['camadaHumana', 'instrucaoFormatacao'] as const) {
