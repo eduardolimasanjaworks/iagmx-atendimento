@@ -189,7 +189,7 @@ export const config = {
   modeloChat: (process.env.MODELO_CHAT ?? 'gpt-4o') as string,
   modeloChatClaude: (process.env.MODELO_CHAT_CLAUDE ?? 'claude-sonnet-4-20250514') as string,
   modeloChatGroq: (process.env.MODELO_CHAT_GROQ ?? 'llama-3.3-70b-versatile') as string,
-  modeloChatOpenRouter: (process.env.MODELO_CHAT_OPENROUTER ?? 'z-ai/glm-5.2') as string,
+  modeloChatOpenRouter: (process.env.MODELO_CHAT_OPENROUTER ?? 'openai/gpt-4o-mini') as string,
   modeloChatOpenRouterAuditoria: (
     process.env.MODELO_CHAT_OPENROUTER_AUDITORIA ?? 'anthropic/claude-fable-5'
   ) as string,
